@@ -1,7 +1,7 @@
 {
   "name": "@cordisjs/logger",
   "description": "Logger plugin for cordis",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "files": [
@@ -32,10 +32,14 @@
   "devDependencies": {
     "@cordisjs/eslint-config": "^1.0.4",
     "@types/node": "^20.10.2",
+    "cordis": "^3.3.1",
     "esbuild": "^0.18.20",
     "esbuild-register": "^3.5.0",
     "eslint": "^8.55.0",
     "typescript": "^5.3.2"
+  },
+  "peerDependencies": {
+    "cordis": "^3.3.1"
   },
   "dependencies": {
     "reggol": "^1.6.3"
