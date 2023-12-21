@@ -1,1 +1,3 @@
-# @cordisjs/logger
+# @cordisjs/std
+
+Standard library for Cordis.
