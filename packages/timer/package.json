@@ -1,7 +1,7 @@
 {
   "name": "@cordisjs/timer",
   "description": "Timer plugin for cordis",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "lib/index.js",
   "module": "lib/index.mjs",
   "types": "lib/index.d.ts",
