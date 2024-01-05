@@ -1,8 +1,5 @@
 import { Context, Service } from 'cordis'
-import { defineProperty, remove } from 'cosmokit'
-import Logger from 'reggol'
-
-export { Logger }
+import { remove } from 'cosmokit'
 
 declare module 'cordis' {
   interface Context {
@@ -13,42 +10,39 @@ declare module 'cordis' {
 class TimerService extends Service {
   constructor(ctx: Context) {
     super(ctx, 'timer', true)
-    defineProperty(this, Context.current, ctx)
+    ctx.mixin('timer', ['setTimeout', 'setInterval', 'sleep', 'throttle', 'debounce'])
   }
 
-  createTimerDispose(timer: number | NodeJS.Timeout) {
-    const dispose = () => {
-      clearTimeout(timer)
-      if (!this[Context.current].scope) return
-      return remove(this[Context.current].scope.disposables, dispose)
-    }
-    this[Context.current].scope.disposables.push(dispose)
+  setTimeout(callback: () => void, delay: number) {
+    const dispose = this[Context.current].effect(() => {
+      const timer = setTimeout(() => {
+        dispose()
+        callback()
+      }, delay)
+      return () => clearTimeout(timer)
+    })
     return dispose
   }
 
-  setTimeout(callback: (...args: any[]) => void, ms: number, ...args: any[]) {
-    const dispose = this.createTimerDispose(setTimeout(() => {
-      dispose()
-      callback()
-    }, ms, ...args))
-    return dispose
+  setInterval(callback: () => void, delay: number) {
+    return this[Context.current].effect(() => {
+      const timer = setInterval(callback, delay)
+      return () => clearInterval(timer)
+    })
   }
 
-  setInterval(callback: (...args: any[]) => void, ms: number, ...args: any[]) {
-    return this.createTimerDispose(setInterval(callback, ms, ...args))
-  }
-
-  sleep(ms: number) {
+  sleep(delay: number) {
+    const caller = this[Context.current]
     return new Promise<void>((resolve, reject) => {
       const dispose1 = this.setTimeout(() => {
         dispose1()
         dispose2()
         resolve()
-      }, ms)
-      const dispose2 = this[Context.current].on('dispose', () => {
+      }, delay)
+      const dispose2 = caller.on('dispose', () => {
         dispose1()
         dispose2()
-        reject(new Error('Context disposed'))
+        reject(new Error('Context has been disposed'))
       })
     })
   }
