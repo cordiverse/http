@@ -27,10 +27,10 @@
     "plugin"
   ],
   "devDependencies": {
-    "cordis": "^3.4.0"
+    "cordis": "^3.5.1"
   },
   "peerDependencies": {
-    "cordis": "^3.4.0"
+    "cordis": "^3.5.1"
   },
   "dependencies": {
     "reggol": "^1.6.3"

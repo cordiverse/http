@@ -1,6 +1,7 @@
 {
   "name": "@root/std",
   "private": true,
+  "type": "module",
   "version": "1.0.0",
   "workspaces": [
     "external/*",
@@ -20,8 +21,10 @@
   },
   "devDependencies": {
     "@cordisjs/eslint-config": "^1.0.4",
+    "@sinonjs/fake-timers": "^6.0.1",
     "@types/chai": "^4.3.11",
     "@types/node": "^20.10.2",
+    "@types/sinonjs__fake-timers": "^6.0.4",
     "c8": "^7.14.0",
     "chai": "^4.3.10",
     "esbuild": "^0.18.20",
@@ -29,7 +32,7 @@
     "eslint": "^8.55.0",
     "shx": "^0.3.4",
     "typescript": "^5.3.2",
-    "yakumo": "^1.0.0-alpha.7",
+    "yakumo": "^1.0.0-alpha.10",
     "yakumo-esbuild": "^1.0.0-alpha.2",
     "yakumo-publish-sync": "^1.0.0-alpha.1",
     "yakumo-tsc": "^1.0.0-alpha.2"
