@@ -50,13 +50,15 @@ export namespace HTTP {
     | 'stream'
 
   export interface Config {
-    endpoint?: string
     headers?: Dict
     timeout?: number
     proxyAgent?: string
   }
 
   export interface RequestConfig extends Config {
+    baseURL?: string
+    /** @deprecated use `baseURL` instead */
+    endpoint?: string
     method?: Method
     params?: Dict
     data?: any
@@ -78,16 +80,28 @@ export namespace HTTP {
 export function apply(ctx: Context, config?: HTTP.Config) {
   ctx.provide('http')
 
-  function mergeConfig(caller: Context, source?: HTTP.RequestConfig): HTTP.RequestConfig {
-    const result = { ...config }
+  function mergeConfig(caller: Context, init?: HTTP.RequestConfig): HTTP.RequestConfig {
+    let result = { headers: {}, ...config }
+    function merge(init?: HTTP.RequestConfig) {
+      result = {
+        ...result,
+        ...config,
+        headers: {
+          ...result.headers,
+          ...init?.headers,
+        },
+      }
+    }
+
     const intercept = caller[Context.intercept]
-    Object.assign(result, intercept.http)
-    return Object.assign(result, source)
+    merge(intercept.http)
+    merge(init)
+    return result
   }
 
-  function resolveURL(url: string | URL, config: HTTP.Config) {
+  function resolveURL(url: string | URL, config: HTTP.RequestConfig) {
     try {
-      return new URL(url).href
+      return new URL(url, config.baseURL).href
     } catch {
       return trimSlash(config.endpoint || '') + url
     }
@@ -100,10 +114,21 @@ export function apply(ctx: Context, config?: HTTP.Config) {
     }
     const config = mergeConfig(this, args[1])
     const url = resolveURL(args[0], config)
+    const controller = new AbortController()
+    this.on('dispose', () => {
+      controller.abort('context disposed')
+    })
+    if (config.timeout) {
+      const timer = setTimeout(() => {
+        controller.abort('timeout')
+      }, config.timeout)
+      this.on('dispose', () => clearTimeout(timer))
+    }
     const response = await fetch(url, {
       method,
       body: config.data,
       headers: config.headers,
+      signal: controller.signal,
     })
     const data = await response.json()
     return {
@@ -146,15 +171,18 @@ export function apply(ctx: Context, config?: HTTP.Config) {
     return response.headers
   }
 
-  http.ws = async function (this: HTTP, url: string, config?: HTTP.Config) {
-    // const caller = this[Context.current]
-    return new WebSocket(url, 'Server' in WebSocket ? {
+  http.ws = async function (this: HTTP, url: string, init?: HTTP.Config) {
+    const caller = this[Context.current]
+    const config = mergeConfig(caller, init)
+    const socket = new WebSocket(url, 'Server' in WebSocket ? {
       // agent: caller.agent(config?.proxyAgent),
       handshakeTimeout: config?.timeout,
-      headers: {
-        ...config?.headers,
-      },
+      headers: config?.headers,
     } as ClientOptions as never : undefined)
+    caller.on('dispose', () => {
+      socket.close(1001, 'context disposed')
+    })
+    return socket
   }
 
   http.axios = async function (this: HTTP, url: string, config?: HTTP.Config) {
