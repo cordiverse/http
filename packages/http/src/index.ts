@@ -19,12 +19,12 @@ export interface HTTP {
   [Context.current]: Context
   <T>(url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
   <T>(method: HTTP.Method, url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
-  get<T>(url: string, config?: HTTP.RequestConfig): Promise<T>
-  delete<T>(url: string, config?: HTTP.RequestConfig): Promise<T>
+  get: HTTP.Request1
+  delete: HTTP.Request1
+  patch: HTTP.Request2
+  post: HTTP.Request2
+  put: HTTP.Request2
   head(url: string, config?: HTTP.RequestConfig): Promise<Dict>
-  patch<T>(url: string, data?: any, config?: HTTP.RequestConfig): Promise<T>
-  post<T>(url: string, data?: any, config?: HTTP.RequestConfig): Promise<T>
-  put<T>(url: string, data?: any, config?: HTTP.RequestConfig): Promise<T>
   /** @deprecated use `ctx.http()` instead */
   axios<T>(url: string, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
   ws(url: string, config?: HTTP.RequestConfig): Promise<WebSocket>
@@ -49,6 +49,20 @@ export namespace HTTP {
     | 'text'
     | 'stream'
 
+  export interface Request1 {
+    (url: string, config?: HTTP.RequestConfig & { responseType: 'arraybuffer' }): Promise<ArrayBuffer>
+    (url: string, config?: HTTP.RequestConfig & { responseType: 'stream' }): Promise<ReadableStream<Uint8Array>>
+    (url: string, config?: HTTP.RequestConfig & { responseType: 'text' }): Promise<string>
+    <T>(url: string, config?: HTTP.RequestConfig): Promise<T>
+  }
+
+  export interface Request2 {
+    (url: string, data?: any, config?: HTTP.RequestConfig & { responseType: 'arraybuffer' }): Promise<ArrayBuffer>
+    (url: string, data?: any, config?: HTTP.RequestConfig & { responseType: 'stream' }): Promise<ReadableStream<Uint8Array>>
+    (url: string, data?: any, config?: HTTP.RequestConfig & { responseType: 'text' }): Promise<string>
+    <T>(url: string, data?: any, config?: HTTP.RequestConfig): Promise<T>
+  }
+
   export interface Config {
     headers?: Dict
     timeout?: number
@@ -62,6 +76,7 @@ export namespace HTTP {
     method?: Method
     params?: Dict
     data?: any
+    keepAlive?: boolean
     responseType?: ResponseType
   }
 
@@ -70,6 +85,7 @@ export namespace HTTP {
   }
 
   export interface Response<T = any> {
+    url: string
     data: T
     status: number
     statusText: string
@@ -93,8 +109,11 @@ export function apply(ctx: Context, config?: HTTP.Config) {
       }
     }
 
-    const intercept = caller[Context.intercept]
-    merge(intercept.http)
+    let intercept = caller[Context.intercept]
+    while (intercept) {
+      merge(intercept.http)
+      intercept = Object.getPrototypeOf(intercept)
+    }
     merge(init)
     return result
   }
@@ -104,6 +123,17 @@ export function apply(ctx: Context, config?: HTTP.Config) {
       return new URL(url, config.baseURL).href
     } catch {
       return trimSlash(config.endpoint || '') + url
+    }
+  }
+
+  function decode(response: Response) {
+    const type = response.headers.get('Content-Type')
+    if (type === 'application/json') {
+      return response.json()
+    } else if (type?.startsWith('text/')) {
+      return response.text()
+    } else {
+      return response.arrayBuffer()
     }
   }
 
@@ -124,19 +154,43 @@ export function apply(ctx: Context, config?: HTTP.Config) {
       }, config.timeout)
       this.on('dispose', () => clearTimeout(timer))
     }
-    const response = await fetch(url, {
+
+    const raw = await fetch(url, {
       method,
       body: config.data,
       headers: config.headers,
       signal: controller.signal,
+    }).catch((cause) => {
+      const error = new HTTP.Error(cause.message)
+      error.cause = cause
+      throw error
     })
-    const data = await response.json()
-    return {
-      data,
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers),
+
+    const response: HTTP.Response = {
+      data: null,
+      url: raw.url,
+      status: raw.status,
+      statusText: raw.statusText,
+      headers: Object.fromEntries(raw.headers),
     }
+
+    if (!raw.ok) {
+      const error = new HTTP.Error(raw.statusText)
+      error.response = response
+      try {
+        response.data = await decode(raw)
+      } catch {}
+      throw error
+    }
+
+    if (config.responseType === 'arraybuffer') {
+      response.data = await raw.arrayBuffer()
+    } else if (config.responseType === 'stream') {
+      response.data = raw.body
+    } else {
+      response.data = await decode(raw)
+    }
+    return response
   } as HTTP
 
   for (const method of ['get', 'delete'] as const) {
