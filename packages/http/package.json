@@ -2,13 +2,24 @@
   "name": "@cordisjs/plugin-http",
   "description": "Axios-style HTTP client service for Cordis",
   "version": "0.1.0",
-  "main": "lib/index.mjs",
+  "type": "module",
+  "module": "lib/index.js",
   "types": "lib/index.d.ts",
   "exports": {
     ".": {
       "require": "./lib/index.cjs",
-      "import": "./lib/index.mjs",
+      "import": "./lib/index.js",
       "types": "./lib/index.d.ts"
+    },
+    "./adapter": {
+      "node": {
+        "require": "./lib/adapter/node.cjs",
+        "import": "./lib/adapter/node.js"
+      },
+      "browser": {
+        "import": "./lib/adapter/browser.js"
+      },
+      "types": "./lib/adapter/index.d.ts"
     },
     "./package.json": "./package.json"
   },
@@ -43,6 +54,7 @@
   },
   "dependencies": {
     "cosmokit": "^1.5.2",
+    "file-type": "^16.5.4",
     "unws": "^0.2.4",
     "ws": "^8.16.0"
   }

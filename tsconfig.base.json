@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "es2022",
-    "module": "commonjs",
+    "module": "nodenext",
     "declaration": true,
     "emitDeclarationOnly": true,
     "strict": true,
@@ -10,6 +10,5 @@
     "incremental": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "moduleResolution": "node",
   },
 }

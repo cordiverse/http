@@ -1,7 +1,9 @@
 import { Context } from 'cordis'
-import { Dict, trimSlash } from 'cosmokit'
+import { base64ToArrayBuffer, Dict, trimSlash } from 'cosmokit'
 import { WebSocket } from 'unws'
 import { ClientOptions } from 'ws'
+import { loadFile, lookup } from './adapter/index.js'
+import { isLocalAddress } from './utils.js'
 
 declare module 'cordis' {
   interface Context {
@@ -19,15 +21,19 @@ export interface HTTP {
   [Context.current]: Context
   <T>(url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
   <T>(method: HTTP.Method, url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
+  /** @deprecated use `ctx.http()` instead */
+  axios<T>(url: string, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
+
   get: HTTP.Request1
   delete: HTTP.Request1
   patch: HTTP.Request2
   post: HTTP.Request2
   put: HTTP.Request2
   head(url: string, config?: HTTP.RequestConfig): Promise<Dict>
-  /** @deprecated use `ctx.http()` instead */
-  axios<T>(url: string, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
   ws(url: string, config?: HTTP.RequestConfig): Promise<WebSocket>
+
+  isLocal(url: string): Promise<boolean>
+  file(url: string, config?: HTTP.FileConfig): Promise<HTTP.FileResponse>
 }
 
 export namespace HTTP {
@@ -89,7 +95,17 @@ export namespace HTTP {
     data: T
     status: number
     statusText: string
-    headers: Dict
+    headers: Headers
+  }
+
+  export interface FileConfig {
+    timeout?: number | string
+  }
+
+  export interface FileResponse {
+    mime?: string
+    name?: string
+    data: ArrayBufferLike
   }
 }
 
@@ -171,7 +187,7 @@ export function apply(ctx: Context, config?: HTTP.Config) {
       url: raw.url,
       status: raw.status,
       statusText: raw.statusText,
-      headers: Object.fromEntries(raw.headers),
+      headers: raw.headers,
     }
 
     if (!raw.ok) {
@@ -192,6 +208,12 @@ export function apply(ctx: Context, config?: HTTP.Config) {
     }
     return response
   } as HTTP
+
+  http.axios = async function (this: HTTP, url: string, config?: HTTP.Config) {
+    const caller = this[Context.current]
+    caller.emit('internal/warning', 'ctx.http.axios() is deprecated, use ctx.http() instead')
+    return caller.http(url, config)
+  }
 
   for (const method of ['get', 'delete'] as const) {
     http[method] = async function <T>(this: HTTP, url: string, config?: HTTP.Config) {
@@ -239,10 +261,37 @@ export function apply(ctx: Context, config?: HTTP.Config) {
     return socket
   }
 
-  http.axios = async function (this: HTTP, url: string, config?: HTTP.Config) {
+  http.file = async function file(this: HTTP, url: string, options: HTTP.FileConfig = {}): Promise<HTTP.FileResponse> {
+    const result = await loadFile(url)
+    if (result) return result
     const caller = this[Context.current]
-    caller.emit('internal/warning', 'ctx.http.axios() is deprecated, use ctx.http() instead')
-    return caller.http(url, config)
+    const capture = /^data:([\w/-]+);base64,(.*)$/.exec(url)
+    if (capture) {
+      const [, mime, base64] = capture
+      return { mime, data: base64ToArrayBuffer(base64) }
+    }
+    const { headers, data, url: responseUrl } = await caller.http<ArrayBuffer>(url, {
+      method: 'GET',
+      responseType: 'arraybuffer',
+      timeout: +options.timeout! || undefined,
+    })
+    const mime = headers['content-type']
+    const [, name] = responseUrl.match(/.+\/([^/?]*)(?=\?)?/)!
+    return { mime, name, data }
+  }
+
+  http.isLocal = async function isLocal(url: string) {
+    let { hostname, protocol } = new URL(url)
+    if (protocol !== 'http:' && protocol !== 'https:') return true
+    if (/^\[.+\]$/.test(hostname)) {
+      hostname = hostname.slice(1, -1)
+    }
+    try {
+      const address = await lookup(hostname)
+      return isLocalAddress(address)
+    } catch {
+      return false
+    }
   }
 
   ctx.http = Context.associate(http, 'http')
