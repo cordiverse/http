@@ -1,5 +1,5 @@
 import { Context } from 'cordis'
-import { Dict } from 'cosmokit'
+import { Dict, trimSlash } from 'cosmokit'
 import { WebSocket } from 'unws'
 import { ClientOptions } from 'ws'
 
@@ -7,26 +7,30 @@ declare module 'cordis' {
   interface Context {
     http: HTTP
   }
-}
 
-interface HTTP {
-  [Context.current]: Context
-  <T>(url: string | URL, config?: HTTP.Config): Promise<HTTP.Response<T>>
-  <T>(method: HTTP.Method, url: string | URL, config?: HTTP.Config): Promise<HTTP.Response<T>>
-  get<T>(url: string, config?: HTTP.Config): Promise<T>
-  delete<T>(url: string, config?: HTTP.Config): Promise<T>
-  head(url: string, config?: HTTP.Config): Promise<Dict>
-  patch<T>(url: string, data?: any, config?: HTTP.Config): Promise<T>
-  post<T>(url: string, data?: any, config?: HTTP.Config): Promise<T>
-  put<T>(url: string, data?: any, config?: HTTP.Config): Promise<T>
-  /** @deprecated use `ctx.http()` instead */
-  axios<T>(url: string, config?: HTTP.Config): Promise<HTTP.Response<T>>
-  ws(url: string, config?: HTTP.Config): Promise<WebSocket>
+  interface Intercept {
+    http: HTTP.Config
+  }
 }
 
 const _Error = Error
 
-namespace HTTP {
+export interface HTTP {
+  [Context.current]: Context
+  <T>(url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
+  <T>(method: HTTP.Method, url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
+  get<T>(url: string, config?: HTTP.RequestConfig): Promise<T>
+  delete<T>(url: string, config?: HTTP.RequestConfig): Promise<T>
+  head(url: string, config?: HTTP.RequestConfig): Promise<Dict>
+  patch<T>(url: string, data?: any, config?: HTTP.RequestConfig): Promise<T>
+  post<T>(url: string, data?: any, config?: HTTP.RequestConfig): Promise<T>
+  put<T>(url: string, data?: any, config?: HTTP.RequestConfig): Promise<T>
+  /** @deprecated use `ctx.http()` instead */
+  axios<T>(url: string, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
+  ws(url: string, config?: HTTP.RequestConfig): Promise<WebSocket>
+}
+
+export namespace HTTP {
   export type Method =
     | 'get' | 'GET'
     | 'delete' | 'DELETE'
@@ -46,12 +50,16 @@ namespace HTTP {
     | 'stream'
 
   export interface Config {
-    method?: Method
-    params?: Dict
-    data?: any
+    endpoint?: string
     headers?: Dict
     timeout?: number
     proxyAgent?: string
+  }
+
+  export interface RequestConfig extends Config {
+    method?: Method
+    params?: Dict
+    data?: any
     responseType?: ResponseType
   }
 
@@ -67,17 +75,35 @@ namespace HTTP {
   }
 }
 
-export function apply(ctx: Context) {
+export function apply(ctx: Context, config?: HTTP.Config) {
   ctx.provide('http')
+
+  function mergeConfig(caller: Context, source?: HTTP.RequestConfig): HTTP.RequestConfig {
+    const result = { ...config }
+    const intercept = caller[Context.intercept]
+    Object.assign(result, intercept.http)
+    return Object.assign(result, source)
+  }
+
+  function resolveURL(url: string | URL, config: HTTP.Config) {
+    try {
+      return new URL(url).href
+    } catch {
+      return trimSlash(config.endpoint || '') + url
+    }
+  }
 
   const http = async function http(this: Context, ...args: any[]) {
     let method: HTTP.Method | undefined
     if (typeof args[1] === 'string' || args[1] instanceof URL) {
       method = args.shift()
     }
-    const response = await fetch(args[0], {
+    const config = mergeConfig(this, args[1])
+    const url = resolveURL(args[0], config)
+    const response = await fetch(url, {
       method,
-      ...args[1],
+      body: config.data,
+      headers: config.headers,
     })
     const data = await response.json()
     return {
@@ -88,10 +114,10 @@ export function apply(ctx: Context) {
     }
   } as HTTP
 
-  for (const method of ['GET', 'DELETE'] as const) {
-    http[method.toLowerCase()] = async function (this: HTTP, url: string, config?: HTTP.Config) {
+  for (const method of ['get', 'delete'] as const) {
+    http[method] = async function <T>(this: HTTP, url: string, config?: HTTP.Config) {
       const caller = this[Context.current]
-      const response = await caller.http(url, {
+      const response = await caller.http<T>(url, {
         method,
         ...config,
       })
@@ -99,10 +125,10 @@ export function apply(ctx: Context) {
     }
   }
 
-  for (const method of ['PATCH', 'POST', 'PUT'] as const) {
-    http[method.toLowerCase()] = async function (this: HTTP, url: string, data?: any, config?: HTTP.Config) {
+  for (const method of ['patch', 'post', 'put'] as const) {
+    http[method] = async function <T>(this: HTTP, url: string, data?: any, config?: HTTP.Config) {
       const caller = this[Context.current]
-      const response = await caller.http(url, {
+      const response = await caller.http<T>(url, {
         method,
         data,
         ...config,
@@ -137,7 +163,7 @@ export function apply(ctx: Context) {
     return caller.http(url, config)
   }
 
-  ctx.http = http
+  ctx.http = Context.associate(http, 'http')
   ctx.on('dispose', () => {
     ctx.http = null as never
   })
