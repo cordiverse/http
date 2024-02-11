@@ -10,5 +10,6 @@
     "incremental": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
   },
 }
