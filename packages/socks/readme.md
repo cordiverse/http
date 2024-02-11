@@ -1,0 +1,1 @@
+# @cordisjs/plugin-http-socks
