@@ -1,9 +1,10 @@
 import { Context } from 'cordis'
 import { base64ToArrayBuffer, Dict, trimSlash } from 'cosmokit'
-import { WebSocket } from 'unws'
 import { ClientOptions } from 'ws'
-import { loadFile, lookup } from './adapter/index.js'
+import { loadFile, lookup, WebSocket } from './adapter/index.js'
 import { isLocalAddress } from './utils.js'
+import type * as undici from 'undici'
+import type * as http from 'http'
 
 declare module 'cordis' {
   interface Context {
@@ -12,6 +13,11 @@ declare module 'cordis' {
 
   interface Intercept {
     http: HTTP.Config
+  }
+
+  interface Events {
+    'http/dispatcher'(url: URL): undici.Dispatcher | undefined
+    'http/http-agent'(url: URL): http.Agent | undefined
   }
 }
 
@@ -135,11 +141,15 @@ export function apply(ctx: Context, config?: HTTP.Config) {
   }
 
   function resolveURL(url: string | URL, config: HTTP.RequestConfig) {
-    try {
-      return new URL(url, config.baseURL).href
-    } catch {
-      return trimSlash(config.endpoint || '') + url
+    if (config.endpoint) {
+      ctx.emit('internal/warning', 'endpoint is deprecated, please use baseURL instead')
+      url = trimSlash(config.endpoint) + url
     }
+    url = new URL(url, config.baseURL)
+    for (const [key, value] of Object.entries(config.params ?? {})) {
+      url.searchParams.append(key, value)
+    }
+    return url
   }
 
   function decode(response: Response) {
@@ -151,6 +161,14 @@ export function apply(ctx: Context, config?: HTTP.Config) {
     } else {
       return response.arrayBuffer()
     }
+  }
+
+  function resolveDispatcher(href?: string) {
+    if (!href) return
+    const url = new URL(href)
+    const agent = ctx.bail('http/dispatcher', url)
+    if (agent) return agent
+    throw new Error(`Cannot resolve proxy agent ${url}`)
   }
 
   const http = async function http(this: Context, ...args: any[]) {
@@ -176,6 +194,7 @@ export function apply(ctx: Context, config?: HTTP.Config) {
       body: config.data,
       headers: config.headers,
       signal: controller.signal,
+      ['dispatcher' as never]: resolveDispatcher(config?.proxyAgent),
     }).catch((cause) => {
       const error = new HTTP.Error(cause.message)
       error.cause = cause
@@ -247,11 +266,20 @@ export function apply(ctx: Context, config?: HTTP.Config) {
     return response.headers
   }
 
-  http.ws = async function (this: HTTP, url: string, init?: HTTP.Config) {
+  function resolveAgent(href?: string) {
+    if (!href) return
+    const url = new URL(href)
+    const agent = ctx.bail('http/http-agent', url)
+    if (agent) return agent
+    throw new Error(`Cannot resolve proxy agent ${url}`)
+  }
+
+  http.ws = async function (this: HTTP, url: string | URL, init?: HTTP.Config) {
     const caller = this[Context.current]
     const config = mergeConfig(caller, init)
+    url = resolveURL(url, config)
     const socket = new WebSocket(url, 'Server' in WebSocket ? {
-      // agent: caller.agent(config?.proxyAgent),
+      agent: resolveAgent(config?.proxyAgent),
       handshakeTimeout: config?.timeout,
       headers: config?.headers,
     } as ClientOptions as never : undefined)
@@ -275,7 +303,7 @@ export function apply(ctx: Context, config?: HTTP.Config) {
       responseType: 'arraybuffer',
       timeout: +options.timeout! || undefined,
     })
-    const mime = headers['content-type']
+    const mime = headers.get('Content-Type') ?? undefined
     const [, name] = responseUrl.match(/.+\/([^/?]*)(?=\?)?/)!
     return { mime, name, data }
   }

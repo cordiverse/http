@@ -4,6 +4,7 @@ import { fromBuffer } from 'file-type'
 import { HTTP } from '../index.js'
 import { readFile } from 'node:fs/promises'
 
+export { WebSocket } from 'ws'
 export { lookup } from 'node:dns/promises'
 
 export async function loadFile(url: string): Promise<HTTP.FileResponse | undefined> {
