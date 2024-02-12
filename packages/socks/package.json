@@ -48,6 +48,8 @@
     "cordis": "^3.10.0"
   },
   "dependencies": {
+    "http-proxy-agent": "^7.0.0",
+    "https-proxy-agent": "^7.0.2",
     "socks": "^2.7.1",
     "socks-proxy-agent": "^8.0.2",
     "undici": "^6.6.2"

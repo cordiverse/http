@@ -5,28 +5,10 @@ import {} from 'undios'
 import { lookup } from 'node:dns/promises'
 import { Context, z } from 'cordis'
 import { SocksClient, SocksProxy } from 'socks'
-import type { Agent, buildConnector, Client } from 'undici'
+import { Agent, buildConnector, ProxyAgent } from 'undici'
+import { HttpProxyAgent } from 'http-proxy-agent'
+import { HttpsProxyAgent } from 'https-proxy-agent'
 import { SocksProxyAgent } from 'socks-proxy-agent'
-import { defineProperty } from 'cosmokit'
-
-// @ts-ignore
-// ensure the global dispatcher is initialized
-fetch().catch(() => {})
-
-function getUniqueSymbol(object: object, name: string) {
-  const symbol = Object.getOwnPropertySymbols(object).find(s => s.toString() === `Symbol(${name})`)
-  return object[symbol!]
-}
-
-const kGlobalDispatcher = Symbol.for('undici.globalDispatcher.1')
-const globalAgent = globalThis[kGlobalDispatcher] as Agent
-const AgentConstructor = globalAgent.constructor as typeof Agent
-const factory = getUniqueSymbol(globalAgent, 'factory') as NonNullable<Agent.Options['factory']>
-
-function build(options: buildConnector.BuildOptions) {
-  const client = factory('http://0.0.0.0', { connections: 1, connect: options }) as Client
-  return getUniqueSymbol(client, 'connector') as buildConnector.connector
-}
 
 function resolvePort(protocol: string, port: string) {
   return port ? Number.parseInt(port) : protocol === 'http:' ? 80 : 443
@@ -34,7 +16,7 @@ function resolvePort(protocol: string, port: string) {
 
 function createConnect({ proxy, shouldLookup }: ParseResult, tlsOpts: buildConnector.BuildOptions = {}): buildConnector.connector {
   const { timeout = 10e3 } = tlsOpts
-  const connect = build(tlsOpts)
+  const connect = buildConnector(tlsOpts)
 
   return async (options, callback) => {
     let { protocol, hostname, port, httpSocket } = options
@@ -72,7 +54,7 @@ interface SocksDispatcherOptions extends Agent.Options {
 
 function socksAgent(result: ParseResult, options: SocksDispatcherOptions = {}) {
   const { connect, ...rest } = options
-  return new AgentConstructor({ ...rest, connect: createConnect(result, connect) })
+  return new Agent({ ...rest, connect: createConnect(result, connect) })
 }
 
 export const name = 'http-socks'
@@ -83,12 +65,17 @@ export const Config: z<Config> = z.object({})
 
 export function apply(ctx: Context, config: Config) {
   ctx.on('http/dispatcher', (url) => {
+    if (['http:', 'https:'].includes(url.protocol)) {
+      return new ProxyAgent(url.href)
+    }
     const result = parseSocksURL(url)
     if (!result) return
     return socksAgent(result)
   })
 
   ctx.on('http/legacy-agent', (url) => {
+    if (url.protocol === 'http:') return new HttpProxyAgent(url)
+    if (url.protocol === 'https:') return new HttpsProxyAgent(url)
     const result = parseSocksURL(url)
     if (!result) return
     return new SocksProxyAgent(url)
@@ -129,8 +116,8 @@ function parseSocksURL(url: URL): ParseResult | undefined {
   }
 
   const proxy: SocksProxy = { host, port, type }
-  if (url.username) defineProperty(proxy, 'userId', decodeURIComponent(url.username))
-  if (url.password) defineProperty(proxy, 'password', decodeURIComponent(url.password))
+  if (url.username) proxy.userId = decodeURIComponent(url.username)
+  if (url.password) proxy.password = decodeURIComponent(url.password)
 
   return { shouldLookup, proxy }
 }
