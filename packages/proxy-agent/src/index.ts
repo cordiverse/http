@@ -115,7 +115,7 @@ function parseSocksURL(url: URL): ParseResult | undefined {
     default: return
   }
 
-  const proxy: SocksProxy = { host, port, type }
+  const proxy: ParseResult['proxy'] = { host, port, type }
   if (url.username) proxy.userId = decodeURIComponent(url.username)
   if (url.password) proxy.password = decodeURIComponent(url.password)
 

@@ -1,7 +1,7 @@
 {
   "name": "undios",
-  "description": "Axios-style HTTP client service for Cordis",
-  "version": "0.1.0",
+  "description": "Fetch-based axios-style HTTP client",
+  "version": "0.1.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -31,22 +31,22 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cordiverse/cordis.git",
-    "directory": "packages/http"
+    "url": "git+https://github.com/cordiverse/undios.git",
+    "directory": "packages/core"
   },
   "bugs": {
-    "url": "https://github.com/cordiverse/cordis/issues"
+    "url": "https://github.com/cordiverse/undios/issues"
   },
-  "homepage": "https://github.com/cordiverse/cordis",
+  "homepage": "https://github.com/cordiverse/undios",
   "keywords": [
-    "cordis",
     "http",
     "fetch",
     "axios",
+    "http",
     "undici",
     "client",
     "request",
-    "service",
+    "cordis",
     "plugin"
   ],
   "devDependencies": {
@@ -59,8 +59,6 @@
   "dependencies": {
     "cosmokit": "^1.5.2",
     "file-type": "^16.5.4",
-    "http-proxy-agent": "^7.0.0",
-    "https-proxy-agent": "^7.0.2",
     "ws": "^8.16.0"
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "undios-proxy-agent",
   "description": "Proxy agent support for undios",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -21,30 +21,33 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cordiverse/http.git",
-    "directory": "packages/socks"
+    "url": "git+https://github.com/cordiverse/undios.git",
+    "directory": "packages/proxy-agent"
   },
   "bugs": {
-    "url": "https://github.com/cordiverse/http/issues"
+    "url": "https://github.com/cordiverse/undios/issues"
   },
-  "homepage": "https://github.com/cordiverse/http",
+  "homepage": "https://github.com/cordiverse/undios",
   "keywords": [
-    "cordis",
     "http",
+    "client",
+    "undici",
     "fetch",
+    "axios",
     "socks",
+    "http",
+    "https",
     "proxy",
     "agent",
     "request",
-    "service",
-    "plugin",
-    "undici"
+    "cordis",
+    "plugin"
   ],
   "devDependencies": {
     "cordis": "^3.10.0"
   },
   "peerDependencies": {
-    "@cordisjs/plugin-http": "^0.1.0",
+    "undios": "^0.1.0",
     "cordis": "^3.10.0"
   },
   "dependencies": {
