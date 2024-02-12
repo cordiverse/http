@@ -3,9 +3,8 @@
 import { LookupAddress } from 'dns'
 import { HTTP } from '../index.js'
 
-const ws = typeof WebSocket !== 'undefined' ? WebSocket : null
-
-export { ws as WebSocket }
+const { WebSocket } = globalThis
+export { WebSocket }
 
 const v4 = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)){3}$/
 

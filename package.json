@@ -34,7 +34,7 @@
     "tsx": "^4.7.0",
     "typescript": "^5.3.2",
     "yakumo": "^1.0.0-alpha.10",
-    "yakumo-esbuild": "^1.0.0-alpha.2",
+    "yakumo-esbuild": "^1.0.0-beta.3",
     "yakumo-publish-sync": "^1.0.0-alpha.1",
     "yakumo-tsc": "^1.0.0-alpha.2"
   }

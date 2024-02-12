@@ -40,17 +40,14 @@ function parseIPv4(ip: string) {
 function parseIPv6(ip: string) {
   const exp = ip.indexOf('::')
   let num = 0n
-  // :: 左边有内容
   if (exp !== -1 && exp !== 0) {
     ip.slice(0, exp).split(':').forEach((piece, i) => {
       num |= BigInt(`0x${piece}`) << BigInt((7 - i) * 16)
     })
   }
-  // :: 在最右边
   if (exp === ip.length - 2) {
     return num
   }
-  // :: 右边的内容
   const rest = exp === -1 ? ip : ip.slice(exp + 2)
   const v4 = rest.includes('.')
   const pieces = rest.split(':')

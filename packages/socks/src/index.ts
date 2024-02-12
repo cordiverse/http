@@ -7,6 +7,10 @@ import { SocksClient, SocksProxy } from 'socks'
 import type { Agent, buildConnector, Client } from 'undici'
 import { SocksProxyAgent } from 'socks-proxy-agent'
 
+// @ts-ignore
+// ensure the global dispatcher is initialized
+fetch().catch(() => {})
+
 function getUniqueSymbol(object: object, name: string) {
   const symbol = Object.getOwnPropertySymbols(object).find(s => s.toString() === `Symbol(${name})`)
   return object[symbol!]
