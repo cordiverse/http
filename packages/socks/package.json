@@ -40,12 +40,12 @@
     "plugin"
   ],
   "devDependencies": {
-    "cordis": "^3.6.1",
+    "cordis": "^3.10.0",
     "undici": "^6.6.2"
   },
   "peerDependencies": {
     "@cordisjs/plugin-http": "^0.1.0",
-    "cordis": "^3.6.1"
+    "cordis": "^3.10.0"
   },
   "dependencies": {
     "socks": "^2.7.1",

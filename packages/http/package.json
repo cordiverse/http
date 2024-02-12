@@ -50,11 +50,11 @@
     "plugin"
   ],
   "devDependencies": {
-    "cordis": "^3.9.2",
+    "cordis": "^3.10.0",
     "undici": "^6.6.2"
   },
   "peerDependencies": {
-    "cordis": "^3.9.2"
+    "cordis": "^3.10.0"
   },
   "dependencies": {
     "cosmokit": "^1.5.2",

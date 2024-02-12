@@ -1,4 +1,4 @@
-import { Context } from 'cordis'
+import { Context, FunctionalService } from 'cordis'
 import { base64ToArrayBuffer, defineProperty, Dict, trimSlash } from 'cosmokit'
 import { ClientOptions } from 'ws'
 import { loadFile, lookup, WebSocket } from '@cordisjs/plugin-http/adapter'
@@ -115,7 +115,7 @@ export interface HTTP {
   put: HTTP.Request2
 }
 
-export class HTTP extends Function {
+export class HTTP extends FunctionalService {
   static Error = HTTPError
   /** @deprecated use `HTTP.Error.is()` instead */
   static isAxiosError = HTTPError.is
@@ -138,95 +138,8 @@ export class HTTP extends Function {
     }
   }
 
-  constructor(ctx: Context, config: HTTP.Config = {}, isExtend?: boolean) {
-    super()
-
-    function resolveDispatcher(href?: string) {
-      if (!href) return
-      const url = new URL(href)
-      const agent = ctx.bail('http/dispatcher', url)
-      if (agent) return agent
-      throw new Error(`Cannot resolve proxy agent ${url}`)
-    }
-
-    const http = async function http(this: Context, ...args: any[]) {
-      let method: HTTP.Method | undefined
-      if (typeof args[1] === 'string' || args[1] instanceof URL) {
-        method = args.shift()
-      }
-      const caller = isExtend ? ctx : this
-      const config = (http as HTTP).resolveConfig(caller, args[1])
-      const url = HTTP.resolveURL(caller, args[0], config)
-
-      const controller = new AbortController()
-      let timer: NodeJS.Timeout | number | undefined
-      const dispose = caller.on('dispose', () => {
-        clearTimeout(timer)
-        controller.abort('context disposed')
-      })
-      if (config.timeout) {
-        timer = setTimeout(() => {
-          controller.abort('timeout')
-        }, config.timeout)
-      }
-
-      try {
-        const raw = await fetch(url, {
-          method,
-          body: config.data,
-          headers: config.headers,
-          keepalive: config.keepAlive,
-          signal: controller.signal,
-          ['dispatcher' as never]: resolveDispatcher(config?.proxyAgent),
-        }).catch((cause) => {
-          const error = new HTTP.Error(`fetch ${url} failed`)
-          error.cause = cause
-          throw error
-        })
-
-        const response: HTTP.Response = {
-          data: null,
-          url: raw.url,
-          status: raw.status,
-          statusText: raw.statusText,
-          headers: raw.headers,
-        }
-
-        if (!raw.ok) {
-          const error = new HTTP.Error(raw.statusText)
-          error.response = response
-          try {
-            response.data = await this.http.decodeResponse(raw)
-          } catch {}
-          throw error
-        }
-
-        if (config.responseType === 'arraybuffer') {
-          response.data = await raw.arrayBuffer()
-        } else if (config.responseType === 'stream') {
-          response.data = raw.body
-        } else {
-          response.data = await this.http.decodeResponse(raw)
-        }
-        return response
-      } finally {
-        dispose()
-      }
-    } as HTTP
-
-    http.config = config
-    defineProperty(http, Context.current, ctx)
-    Object.setPrototypeOf(http, Object.getPrototypeOf(this))
-
-    if (!isExtend) {
-      ctx.provide('http')
-      ctx.http = http
-      ctx.on('dispose', () => {
-        ctx.http = null as never
-      })
-    }
-
-    return http
+  constructor(ctx: Context, public config: HTTP.Config = {}, standalone?: boolean) {
+    super(ctx, 'http', { immediate: true, standalone })
   }
 
   static mergeConfig = (target: HTTP.Config, source?: HTTP.Config) => ({
@@ -242,9 +155,17 @@ export class HTTP extends Function {
     return new HTTP(this[Context.current], HTTP.mergeConfig(this.config, config), true)
   }
 
-  resolveConfig(caller: Context, init?: HTTP.RequestConfig): HTTP.RequestConfig {
+  resolveDispatcher(href?: string) {
+    if (!href) return
+    const url = new URL(href)
+    const agent = this[Context.current].bail('http/dispatcher', url)
+    if (agent) return agent
+    throw new Error(`Cannot resolve proxy agent ${url}`)
+  }
+
+  resolveConfig(ctx: Context, init?: HTTP.RequestConfig): HTTP.RequestConfig {
     let result = { headers: {}, ...this.config }
-    let intercept = caller[Context.intercept]
+    let intercept = ctx[Context.intercept]
     while (intercept) {
       result = HTTP.mergeConfig(result, intercept.http)
       intercept = Object.getPrototypeOf(intercept)
@@ -285,6 +206,70 @@ export class HTTP extends Function {
     }
   }
 
+  async call(caller: Context, ...args: any[]) {
+    let method: HTTP.Method | undefined
+    if (typeof args[1] === 'string' || args[1] instanceof URL) {
+      method = args.shift()
+    }
+    const config = this.resolveConfig(caller, args[1])
+    const url = HTTP.resolveURL(caller, args[0], config)
+
+    const controller = new AbortController()
+    let timer: NodeJS.Timeout | number | undefined
+    const dispose = caller.on('dispose', () => {
+      clearTimeout(timer)
+      controller.abort('context disposed')
+    })
+    if (config.timeout) {
+      timer = setTimeout(() => {
+        controller.abort('timeout')
+      }, config.timeout)
+    }
+
+    try {
+      const raw = await fetch(url, {
+        method,
+        body: config.data,
+        headers: config.headers,
+        keepalive: config.keepAlive,
+        signal: controller.signal,
+        ['dispatcher' as never]: this.resolveDispatcher(config?.proxyAgent),
+      }).catch((cause) => {
+        const error = new HTTP.Error(`fetch ${url} failed`)
+        error.cause = cause
+        throw error
+      })
+
+      const response: HTTP.Response = {
+        data: null,
+        url: raw.url,
+        status: raw.status,
+        statusText: raw.statusText,
+        headers: raw.headers,
+      }
+
+      if (!raw.ok) {
+        const error = new HTTP.Error(raw.statusText)
+        error.response = response
+        try {
+          response.data = await this.decodeResponse(raw)
+        } catch {}
+        throw error
+      }
+
+      if (config.responseType === 'arraybuffer') {
+        response.data = await raw.arrayBuffer()
+      } else if (config.responseType === 'stream') {
+        response.data = raw.body
+      } else {
+        response.data = await this.decodeResponse(raw)
+      }
+      return response
+    } finally {
+      dispose()
+    }
+  }
+
   async head(url: string, config?: HTTP.Config) {
     const caller = this[Context.current]
     const response = await this.call(caller, 'HEAD', url, config)
@@ -292,7 +277,7 @@ export class HTTP extends Function {
   }
 
   /** @deprecated use `ctx.http()` instead */
-  axios<T>(url: string, config?: HTTP.Config): HTTP.Response<T> {
+  axios<T>(url: string, config?: HTTP.Config): Promise<HTTP.Response<T>> {
     const caller = this[Context.current]
     caller.emit('internal/warning', 'ctx.http.axios() is deprecated, use ctx.http() instead')
     return this.call(caller, url, config)
