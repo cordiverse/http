@@ -1,11 +1,13 @@
 // modified from https://github.com/Kaciras/fetch-socks/blob/41cec5a02c36687279ad2628f7c46327f7ff3e2d/index.ts
 // modified from https://github.com/TooTallNate/proxy-agents/blob/c881a1804197b89580320b87082971c3c6a61746/packages/socks-proxy-agent/src/index.ts
 
-import {} from '@cordisjs/plugin-http'
+import {} from 'undios'
+import { lookup } from 'node:dns/promises'
 import { Context, z } from 'cordis'
 import { SocksClient, SocksProxy } from 'socks'
 import type { Agent, buildConnector, Client } from 'undici'
 import { SocksProxyAgent } from 'socks-proxy-agent'
+import { defineProperty } from 'cosmokit'
 
 // @ts-ignore
 // ensure the global dispatcher is initialized
@@ -30,31 +32,29 @@ function resolvePort(protocol: string, port: string) {
   return port ? Number.parseInt(port) : protocol === 'http:' ? 80 : 443
 }
 
-function socksConnector(proxy: SocksProxy, tlsOpts: buildConnector.BuildOptions = {}): buildConnector.connector {
+function createConnect({ proxy, shouldLookup }: ParseResult, tlsOpts: buildConnector.BuildOptions = {}): buildConnector.connector {
   const { timeout = 10e3 } = tlsOpts
   const connect = build(tlsOpts)
 
   return async (options, callback) => {
     let { protocol, hostname, port, httpSocket } = options
 
-    const destination = {
-      host: hostname,
-      port: resolvePort(protocol, port),
-    }
-
-    const socksOpts = {
-      command: 'connect' as const,
-      proxy,
-      timeout,
-      destination,
-      existing_socket: httpSocket,
-    }
-
     try {
-      const r = await SocksClient.createConnection(socksOpts)
-      httpSocket = r.socket
-    } catch (error) {
-      // @ts-ignore
+      if (shouldLookup) {
+        hostname = (await lookup(hostname)).address
+      }
+      const event = await SocksClient.createConnection({
+        command: 'connect',
+        proxy,
+        timeout,
+        destination: {
+          host: hostname,
+          port: resolvePort(protocol, port),
+        },
+        existing_socket: httpSocket,
+      })
+      httpSocket = event.socket
+    } catch (error: any) {
       return callback(error, null)
     }
 
@@ -70,9 +70,9 @@ interface SocksDispatcherOptions extends Agent.Options {
   connect?: buildConnector.BuildOptions
 }
 
-function socksDispatcher(proxies: SocksProxy, options: SocksDispatcherOptions = {}) {
+function socksAgent(result: ParseResult, options: SocksDispatcherOptions = {}) {
   const { connect, ...rest } = options
-  return new AgentConstructor({ ...rest, connect: socksConnector(proxies, connect) })
+  return new AgentConstructor({ ...rest, connect: createConnect(result, connect) })
 }
 
 export const name = 'http-socks'
@@ -82,79 +82,55 @@ export interface Config {}
 export const Config: z<Config> = z.object({})
 
 export function apply(ctx: Context, config: Config) {
-  ctx.on('http/dispatcher', (href) => {
-    const url = new URL(href)
-    try {
-      const { proxy } = parseSocksURL(url)
-      return socksDispatcher(proxy)
-    } catch {}
+  ctx.on('http/dispatcher', (url) => {
+    const result = parseSocksURL(url)
+    if (!result) return
+    return socksAgent(result)
   })
 
-  ctx.on('http/http-agent', (href) => {
-    try {
-      return new SocksProxyAgent(href)
-    } catch {}
+  ctx.on('http/legacy-agent', (url) => {
+    const result = parseSocksURL(url)
+    if (!result) return
+    return new SocksProxyAgent(url)
   })
 }
 
-function parseSocksURL(url: URL): { lookup: boolean; proxy: SocksProxy } {
-  let lookup = false
-  let type: SocksProxy['type'] = 5
-  const host = url.hostname
+interface ParseResult {
+  shouldLookup: boolean
+  proxy: SocksProxy & { host: string }
+}
+
+function parseSocksURL(url: URL): ParseResult | undefined {
+  let shouldLookup = false
+  let type: SocksProxy['type']
 
   // From RFC 1928, Section 3: https://tools.ietf.org/html/rfc1928#section-3
   // "The SOCKS service is conventionally located on TCP port 1080"
   const port = parseInt(url.port, 10) || 1080
+  const host = url.hostname
 
   // figure out if we want socks v4 or v5, based on the "protocol" used.
   // Defaults to 5.
   switch (url.protocol.replace(':', '')) {
     case 'socks4':
-      lookup = true
-      type = 4
-      break
-      // pass through
+      shouldLookup = true
+    // eslint-disable-next-line no-fallthrough
     case 'socks4a':
       type = 4
       break
     case 'socks5':
-      lookup = true
-      type = 5
-      break
-      // pass through
-    case 'socks': // no version specified, default to 5h
-      type = 5
-      break
+      shouldLookup = true
+    // eslint-disable-next-line no-fallthrough
+    case 'socks':
     case 'socks5h':
       type = 5
       break
-    default:
-      throw new TypeError(
-        `A "socks" protocol must be specified! Got: ${String(
-          url.protocol,
-        )}`,
-      )
+    default: return
   }
 
-  const proxy: SocksProxy = {
-    host,
-    port,
-    type,
-  }
+  const proxy: SocksProxy = { host, port, type }
+  if (url.username) defineProperty(proxy, 'userId', decodeURIComponent(url.username))
+  if (url.password) defineProperty(proxy, 'password', decodeURIComponent(url.password))
 
-  if (url.username) {
-    Object.defineProperty(proxy, 'userId', {
-      value: decodeURIComponent(url.username),
-      enumerable: false,
-    })
-  }
-
-  if (url.password != null) {
-    Object.defineProperty(proxy, 'password', {
-      value: decodeURIComponent(url.password),
-      enumerable: false,
-    })
-  }
-
-  return { lookup, proxy }
+  return { shouldLookup, proxy }
 }

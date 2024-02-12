@@ -1,6 +1,6 @@
 {
-  "name": "@cordisjs/plugin-http-socks",
-  "description": "Socks proxy agent support for @cordisjs/plugin-http",
+  "name": "undios-proxy-agent",
+  "description": "Proxy agent support for undios",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
@@ -37,11 +37,11 @@
     "agent",
     "request",
     "service",
-    "plugin"
+    "plugin",
+    "undici"
   ],
   "devDependencies": {
-    "cordis": "^3.10.0",
-    "undici": "^6.6.2"
+    "cordis": "^3.10.0"
   },
   "peerDependencies": {
     "@cordisjs/plugin-http": "^0.1.0",
@@ -49,6 +49,7 @@
   },
   "dependencies": {
     "socks": "^2.7.1",
-    "socks-proxy-agent": "^8.0.2"
+    "socks-proxy-agent": "^8.0.2",
+    "undici": "^6.6.2"
   }
 }

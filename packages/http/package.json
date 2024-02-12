@@ -1,5 +1,5 @@
 {
-  "name": "@cordisjs/plugin-http",
+  "name": "undios",
   "description": "Axios-style HTTP client service for Cordis",
   "version": "0.1.0",
   "type": "module",

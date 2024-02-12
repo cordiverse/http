@@ -1,7 +1,7 @@
 import { Context, FunctionalService } from 'cordis'
 import { base64ToArrayBuffer, defineProperty, Dict, trimSlash } from 'cosmokit'
 import { ClientOptions } from 'ws'
-import { loadFile, lookup, WebSocket } from '@cordisjs/plugin-http/adapter'
+import { loadFile, lookup, WebSocket } from 'undios/adapter'
 import { isLocalAddress } from './utils.ts'
 import type * as undici from 'undici'
 import type * as http from 'http'
@@ -17,7 +17,7 @@ declare module 'cordis' {
 
   interface Events {
     'http/dispatcher'(url: URL): undici.Dispatcher | undefined
-    'http/http-agent'(url: URL): http.Agent | undefined
+    'http/legacy-agent'(url: URL): http.Agent | undefined
   }
 }
 
@@ -286,7 +286,7 @@ export class HTTP extends FunctionalService {
   resolveAgent(href?: string) {
     if (!href) return
     const url = new URL(href)
-    const agent = this[Context.current].bail('http/http-agent', url)
+    const agent = this[Context.current].bail('http/legacy-agent', url)
     if (agent) return agent
     throw new Error(`Cannot resolve proxy agent ${url}`)
   }
@@ -300,8 +300,11 @@ export class HTTP extends FunctionalService {
       handshakeTimeout: config?.timeout,
       headers: config?.headers,
     } as ClientOptions as never : undefined)
-    caller.on('dispose', () => {
+    const dispose = caller.on('dispose', () => {
       socket.close(1001, 'context disposed')
+    })
+    socket.addEventListener('close', () => {
+      dispose()
     })
     return socket
   }
