@@ -44,11 +44,11 @@
     "plugin"
   ],
   "devDependencies": {
-    "cordis": "^3.10.0"
+    "cordis": "^3.10.1"
   },
   "peerDependencies": {
-    "undios": "^0.1.0",
-    "cordis": "^3.10.0"
+    "cordis": "^3.10.1",
+    "undios": "^0.1.0"
   },
   "dependencies": {
     "http-proxy-agent": "^7.0.0",

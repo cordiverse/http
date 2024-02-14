@@ -2,13 +2,29 @@
 // modified from https://github.com/TooTallNate/proxy-agents/blob/c881a1804197b89580320b87082971c3c6a61746/packages/socks-proxy-agent/src/index.ts
 
 import {} from 'undios'
+import * as http from 'node:http'
 import { lookup } from 'node:dns/promises'
 import { Context, z } from 'cordis'
 import { SocksClient, SocksProxy } from 'socks'
-import { Agent, buildConnector, ProxyAgent } from 'undici'
+import { Agent, buildConnector, Dispatcher, ProxyAgent } from 'undici'
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import { SocksProxyAgent } from 'socks-proxy-agent'
+
+declare module 'cordis' {
+  interface Events {
+    'http/dispatcher'(url: URL): Dispatcher | undefined
+    'http/legacy-agent'(url: URL): http.Agent | undefined
+  }
+}
+
+declare module 'undios' {
+  namespace HTTP {
+    interface Config {
+      proxyAgent?: string
+    }
+  }
+}
 
 function resolvePort(protocol: string, port: string) {
   return port ? Number.parseInt(port) : protocol === 'http:' ? 80 : 443
@@ -64,6 +80,14 @@ export interface Config {}
 export const Config: z<Config> = z.object({})
 
 export function apply(ctx: Context, config: Config) {
+  ctx.on('http/fetch-init', (init, config) => {
+    if (!config?.proxyAgent) return
+    const url = new URL(config.proxyAgent)
+    const agent = ctx.bail('http/dispatcher', url)
+    if (!agent) throw new Error(`Cannot resolve proxy agent ${url}`)
+    init['dispatcher'] = agent
+  })
+
   ctx.on('http/dispatcher', (url) => {
     if (['http:', 'https:'].includes(url.protocol)) {
       return new ProxyAgent(url.href)
@@ -71,6 +95,14 @@ export function apply(ctx: Context, config: Config) {
     const result = parseSocksURL(url)
     if (!result) return
     return socksAgent(result)
+  })
+
+  ctx.on('http/websocket-init', (init, config) => {
+    if (!config?.proxyAgent) return
+    const url = new URL(config.proxyAgent)
+    const agent = ctx.bail('http/legacy-agent', url)
+    if (!agent) throw new Error(`Cannot resolve proxy agent ${url}`)
+    init.agent = agent
   })
 
   ctx.on('http/legacy-agent', (url) => {

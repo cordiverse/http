@@ -1,10 +1,8 @@
-import { Context, FunctionalService } from 'cordis'
+import { Context, Service } from 'cordis'
 import { base64ToArrayBuffer, defineProperty, Dict, trimSlash } from 'cosmokit'
 import { ClientOptions } from 'ws'
 import { loadFile, lookup, WebSocket } from 'undios/adapter'
 import { isLocalAddress } from './utils.ts'
-import type * as undici from 'undici'
-import type * as http from 'http'
 
 declare module 'cordis' {
   interface Context {
@@ -16,8 +14,8 @@ declare module 'cordis' {
   }
 
   interface Events {
-    'http/dispatcher'(url: URL): undici.Dispatcher | undefined
-    'http/legacy-agent'(url: URL): http.Agent | undefined
+    'http/fetch-init'(init: RequestInit, config: HTTP.Config): void
+    'http/websocket-init'(init: ClientOptions, config: HTTP.Config): void
   }
 }
 
@@ -68,7 +66,6 @@ export namespace HTTP {
   export interface Config {
     headers?: Dict
     timeout?: number
-    proxyAgent?: string
   }
 
   export interface RequestConfig extends Config {
@@ -97,14 +94,13 @@ export namespace HTTP {
   export interface FileResponse {
     mime?: string
     name?: string
-    data: ArrayBufferLike
+    data: ArrayBuffer
   }
 
   export type Error = HTTPError
 }
 
 export interface HTTP {
-  [Context.current]: Context
   <T>(url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
   <T>(method: HTTP.Method, url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
   config: HTTP.Config
@@ -115,7 +111,7 @@ export interface HTTP {
   put: HTTP.Request2
 }
 
-export class HTTP extends FunctionalService {
+export class HTTP extends Service {
   static Error = HTTPError
   /** @deprecated use `HTTP.Error.is()` instead */
   static isAxiosError = HTTPError.is
@@ -123,16 +119,14 @@ export class HTTP extends FunctionalService {
   static {
     for (const method of ['get', 'delete'] as const) {
       defineProperty(HTTP.prototype, method, async function (this: HTTP, url: string, config?: HTTP.Config) {
-        const caller = this[Context.current]
-        const response = await this.call(caller, method, url, config)
+        const response = await this(method, url, config)
         return response.data
       })
     }
 
     for (const method of ['patch', 'post', 'put'] as const) {
       defineProperty(HTTP.prototype, method, async function (this: HTTP, url: string, data?: any, config?: HTTP.Config) {
-        const caller = this[Context.current]
-        const response = await this.call(caller, method, url, { data, ...config })
+        const response = await this(method, url, { data, ...config })
         return response.data
       })
     }
@@ -155,17 +149,9 @@ export class HTTP extends FunctionalService {
     return new HTTP(this[Context.current], HTTP.mergeConfig(this.config, config), true)
   }
 
-  resolveDispatcher(href?: string) {
-    if (!href) return
-    const url = new URL(href)
-    const agent = this[Context.current].bail('http/dispatcher', url)
-    if (agent) return agent
-    throw new Error(`Cannot resolve proxy agent ${url}`)
-  }
-
-  resolveConfig(ctx: Context, init?: HTTP.RequestConfig): HTTP.RequestConfig {
+  resolveConfig(init?: HTTP.RequestConfig): HTTP.RequestConfig {
     let result = { headers: {}, ...this.config }
-    let intercept = ctx[Context.intercept]
+    let intercept = this[Context.current][Context.intercept]
     while (intercept) {
       result = HTTP.mergeConfig(result, intercept.http)
       intercept = Object.getPrototypeOf(intercept)
@@ -174,9 +160,9 @@ export class HTTP extends FunctionalService {
     return result
   }
 
-  static resolveURL(caller: Context, url: string | URL, config: HTTP.RequestConfig) {
+  resolveURL(url: string | URL, config: HTTP.RequestConfig) {
     if (config.endpoint) {
-      // caller.emit('internal/warning', 'endpoint is deprecated, please use baseURL instead')
+      // this[Context.current].emit('internal/warning', 'endpoint is deprecated, please use baseURL instead')
       try {
         new URL(url)
       } catch {
@@ -206,13 +192,14 @@ export class HTTP extends FunctionalService {
     }
   }
 
-  async call(caller: Context, ...args: any[]) {
+  async [Context.invoke](...args: any[]) {
+    const caller = this[Context.current]
     let method: HTTP.Method | undefined
     if (typeof args[1] === 'string' || args[1] instanceof URL) {
       method = args.shift()
     }
-    const config = this.resolveConfig(caller, args[1])
-    const url = HTTP.resolveURL(caller, args[0], config)
+    const config = this.resolveConfig(args[1])
+    const url = this.resolveURL(args[0], config)
 
     const controller = new AbortController()
     let timer: NodeJS.Timeout | number | undefined
@@ -227,14 +214,9 @@ export class HTTP extends FunctionalService {
     }
 
     try {
-      const raw = await fetch(url, {
-        method,
-        body: config.data,
-        headers: config.headers,
-        keepalive: config.keepAlive,
-        signal: controller.signal,
-        ['dispatcher' as never]: this.resolveDispatcher(config?.proxyAgent),
-      }).catch((cause) => {
+      const init: RequestInit = { method, headers: config.headers, signal: controller.signal }
+      caller.emit('http/fetch-init', init, config)
+      const raw = await fetch(url, init).catch((cause) => {
         const error = new HTTP.Error(`fetch ${url} failed`)
         error.cause = cause
         throw error
@@ -271,8 +253,7 @@ export class HTTP extends FunctionalService {
   }
 
   async head(url: string, config?: HTTP.Config) {
-    const caller = this[Context.current]
-    const response = await this.call(caller, 'HEAD', url, config)
+    const response = await this('HEAD', url, config)
     return response.headers
   }
 
@@ -280,26 +261,22 @@ export class HTTP extends FunctionalService {
   axios<T>(url: string, config?: HTTP.Config): Promise<HTTP.Response<T>> {
     const caller = this[Context.current]
     caller.emit('internal/warning', 'ctx.http.axios() is deprecated, use ctx.http() instead')
-    return this.call(caller, url, config)
-  }
-
-  resolveAgent(href?: string) {
-    if (!href) return
-    const url = new URL(href)
-    const agent = this[Context.current].bail('http/legacy-agent', url)
-    if (agent) return agent
-    throw new Error(`Cannot resolve proxy agent ${url}`)
+    return this(url, config)
   }
 
   async ws(this: HTTP, url: string | URL, init?: HTTP.Config) {
     const caller = this[Context.current]
-    const config = this.resolveConfig(caller, init)
-    url = HTTP.resolveURL(caller, url, config)
-    const socket = new WebSocket(url, 'Server' in WebSocket ? {
-      agent: this.resolveAgent(config?.proxyAgent),
-      handshakeTimeout: config?.timeout,
-      headers: config?.headers,
-    } as ClientOptions as never : undefined)
+    const config = this.resolveConfig(init)
+    url = this.resolveURL(url, config)
+    let options: ClientOptions | undefined
+    if ('Server' in WebSocket) {
+      options = {
+        handshakeTimeout: config?.timeout,
+        headers: config?.headers,
+      }
+      caller.emit('http/websocket-init', options, config)
+    }
+    const socket = new WebSocket(url, options)
     const dispose = caller.on('dispose', () => {
       socket.close(1001, 'context disposed')
     })
@@ -312,13 +289,12 @@ export class HTTP extends FunctionalService {
   async file(url: string, options: HTTP.FileConfig = {}): Promise<HTTP.FileResponse> {
     const result = await loadFile(url)
     if (result) return result
-    const caller = this[Context.current]
     const capture = /^data:([\w/-]+);base64,(.*)$/.exec(url)
     if (capture) {
       const [, mime, base64] = capture
       return { mime, data: base64ToArrayBuffer(base64) }
     }
-    const { headers, data, url: responseUrl } = await this.call(caller, url, {
+    const { headers, data, url: responseUrl } = await this<ArrayBuffer>(url, {
       method: 'GET',
       responseType: 'arraybuffer',
       timeout: +options.timeout! || undefined,
