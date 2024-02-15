@@ -1,8 +1,7 @@
 import { Context, Service } from 'cordis'
-import { base64ToArrayBuffer, defineProperty, Dict, trimSlash } from 'cosmokit'
+import { defineProperty, Dict, trimSlash } from 'cosmokit'
 import { ClientOptions } from 'ws'
-import { loadFile, lookup, WebSocket } from 'undios/adapter'
-import { isLocalAddress } from './utils.ts'
+import { WebSocket } from 'undios/adapter'
 
 declare module 'cordis' {
   interface Context {
@@ -53,25 +52,25 @@ export namespace HTTP {
     (url: string, config?: HTTP.RequestConfig & { responseType: 'arraybuffer' }): Promise<ArrayBuffer>
     (url: string, config?: HTTP.RequestConfig & { responseType: 'stream' }): Promise<ReadableStream<Uint8Array>>
     (url: string, config?: HTTP.RequestConfig & { responseType: 'text' }): Promise<string>
-    <T>(url: string, config?: HTTP.RequestConfig): Promise<T>
+    <T = any>(url: string, config?: HTTP.RequestConfig): Promise<T>
   }
 
   export interface Request2 {
     (url: string, data?: any, config?: HTTP.RequestConfig & { responseType: 'arraybuffer' }): Promise<ArrayBuffer>
     (url: string, data?: any, config?: HTTP.RequestConfig & { responseType: 'stream' }): Promise<ReadableStream<Uint8Array>>
     (url: string, data?: any, config?: HTTP.RequestConfig & { responseType: 'text' }): Promise<string>
-    <T>(url: string, data?: any, config?: HTTP.RequestConfig): Promise<T>
+    <T = any>(url: string, data?: any, config?: HTTP.RequestConfig): Promise<T>
   }
 
   export interface Config {
+    baseURL?: string
+    /** @deprecated use `baseURL` instead */
+    endpoint?: string
     headers?: Dict
     timeout?: number
   }
 
   export interface RequestConfig extends Config {
-    baseURL?: string
-    /** @deprecated use `baseURL` instead */
-    endpoint?: string
     method?: Method
     params?: Dict
     data?: any
@@ -87,22 +86,12 @@ export namespace HTTP {
     headers: Headers
   }
 
-  export interface FileConfig {
-    timeout?: number | string
-  }
-
-  export interface FileResponse {
-    mime?: string
-    name?: string
-    data: ArrayBuffer
-  }
-
   export type Error = HTTPError
 }
 
 export interface HTTP {
-  <T>(url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
-  <T>(method: HTTP.Method, url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
+  <T = any>(url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
+  <T = any>(method: HTTP.Method, url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
   config: HTTP.Config
   get: HTTP.Request1
   delete: HTTP.Request1
@@ -258,10 +247,16 @@ export class HTTP extends Service {
   }
 
   /** @deprecated use `ctx.http()` instead */
-  axios<T>(url: string, config?: HTTP.Config): Promise<HTTP.Response<T>> {
+  axios<T = any>(config: { url: string } & HTTP.RequestConfig): Promise<HTTP.Response<T>>
+  axios<T = any>(url: string, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
+  axios(...args: any[]) {
     const caller = this[Context.current]
     caller.emit('internal/warning', 'ctx.http.axios() is deprecated, use ctx.http() instead')
-    return this(url, config)
+    if (typeof args[0] === 'string') {
+      return this(args[0], args[1])
+    } else {
+      return this(args[0].url, args[0])
+    }
   }
 
   async ws(this: HTTP, url: string | URL, init?: HTTP.Config) {
@@ -284,38 +279,6 @@ export class HTTP extends Service {
       dispose()
     })
     return socket
-  }
-
-  async file(url: string, options: HTTP.FileConfig = {}): Promise<HTTP.FileResponse> {
-    const result = await loadFile(url)
-    if (result) return result
-    const capture = /^data:([\w/-]+);base64,(.*)$/.exec(url)
-    if (capture) {
-      const [, mime, base64] = capture
-      return { mime, data: base64ToArrayBuffer(base64) }
-    }
-    const { headers, data, url: responseUrl } = await this<ArrayBuffer>(url, {
-      method: 'GET',
-      responseType: 'arraybuffer',
-      timeout: +options.timeout! || undefined,
-    })
-    const mime = headers.get('content-type') ?? undefined
-    const [, name] = responseUrl.match(/.+\/([^/?]*)(?=\?)?/)!
-    return { mime, name, data }
-  }
-
-  async isLocal(url: string) {
-    let { hostname, protocol } = new URL(url)
-    if (protocol !== 'http:' && protocol !== 'https:') return true
-    if (/^\[.+\]$/.test(hostname)) {
-      hostname = hostname.slice(1, -1)
-    }
-    try {
-      const address = await lookup(hostname)
-      return isLocalAddress(address)
-    } catch {
-      return false
-    }
   }
 }
 
