@@ -13,6 +13,7 @@ declare module 'cordis' {
   }
 
   interface Events {
+    'http/config'(config: HTTP.Config): void
     'http/fetch-init'(init: RequestInit, config: HTTP.Config): void
     'http/websocket-init'(init: ClientOptions, config: HTTP.Config): void
   }
@@ -139,8 +140,10 @@ export class HTTP extends Service {
   }
 
   resolveConfig(init?: HTTP.RequestConfig): HTTP.RequestConfig {
+    const caller = this[Context.current]
     let result = { headers: {}, ...this.config }
-    let intercept = this[Context.current][Context.intercept]
+    caller.emit('http/config', result)
+    let intercept = caller[Context.intercept]
     while (intercept) {
       result = HTTP.mergeConfig(result, intercept.http)
       intercept = Object.getPrototypeOf(intercept)

@@ -2,6 +2,7 @@ import HTTP, {} from 'undios'
 import { loadFile, lookup } from 'undios-file/adapter'
 import { Context, z } from 'cordis'
 import { base64ToArrayBuffer } from 'cosmokit'
+import mimedb from 'mime-db'
 import { isLocalAddress } from './utils.ts'
 
 declare module 'undios' {
@@ -17,7 +18,7 @@ export interface FileConfig {
 
 export interface FileResponse {
   mime?: string
-  name?: string
+  filename: string
   data: ArrayBuffer
 }
 
@@ -31,13 +32,20 @@ export function apply(ctx: Context, config: Config) {
   ctx.provide('http.file')
   ctx.provide('http.local')
 
+  function createName(mime: string | undefined) {
+    let name = 'file'
+    const ext = mime && mimedb[mime]?.extensions?.[0]
+    if (ext) name += `.${ext}`
+    return name
+  }
+
   ctx['http.file'] = async function file(this: HTTP, url: string, options: FileConfig = {}): Promise<FileResponse> {
     const result = await loadFile(url)
     if (result) return result
     const capture = /^data:([\w/-]+);base64,(.*)$/.exec(url)
     if (capture) {
       const [, mime, base64] = capture
-      return { mime, data: base64ToArrayBuffer(base64) }
+      return { mime, data: base64ToArrayBuffer(base64), filename: createName(mime) }
     }
     const { headers, data, url: responseUrl } = await this<ArrayBuffer>(url, {
       method: 'GET',
@@ -46,7 +54,7 @@ export function apply(ctx: Context, config: Config) {
     })
     const mime = headers.get('content-type') ?? undefined
     const [, name] = responseUrl.match(/.+\/([^/?]*)(?=\?)?/)!
-    return { mime, name, data }
+    return { mime, filename: name, data }
   }
 
   ctx['http.local'] = async function isLocal(url: string) {

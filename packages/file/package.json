@@ -1,7 +1,7 @@
 {
   "name": "undios-file",
   "description": "File support for undios",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -51,6 +51,7 @@
     "plugin"
   ],
   "devDependencies": {
+    "@types/mime-db": "^1.43.5",
     "cordis": "^3.10.3"
   },
   "peerDependencies": {

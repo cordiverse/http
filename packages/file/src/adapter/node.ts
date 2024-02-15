@@ -10,6 +10,6 @@ export async function loadFile(url: string): Promise<FileResponse | undefined> {
   if (url.startsWith('file://')) {
     const data = await readFile(fileURLToPath(url))
     const result = await fromBuffer(data)
-    return { mime: result?.mime, name: basename(url), data }
+    return { mime: result?.mime, filename: basename(url), data }
   }
 }
