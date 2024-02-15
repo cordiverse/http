@@ -73,7 +73,7 @@ function socksAgent(result: ParseResult, options: SocksDispatcherOptions = {}) {
   return new Agent({ ...rest, connect: createConnect(result, connect) })
 }
 
-export const name = 'http-socks'
+export const name = 'undios-proxy-agent'
 
 export interface Config {}
 

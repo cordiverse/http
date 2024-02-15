@@ -1,7 +1,7 @@
 {
   "name": "undios",
   "description": "Fetch-based axios-style HTTP client",
-  "version": "0.1.1",
+  "version": "0.1.4",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -16,7 +16,7 @@
         "require": "./lib/adapter/node.cjs",
         "import": "./lib/adapter/node.js"
       },
-      "browser": {
+      "default": {
         "import": "./lib/adapter/browser.js"
       },
       "types": "./lib/adapter/index.d.ts"
@@ -50,15 +50,14 @@
     "plugin"
   ],
   "devDependencies": {
-    "cordis": "^3.10.1",
+    "cordis": "^3.10.4",
     "undici": "^6.6.2"
   },
   "peerDependencies": {
-    "cordis": "^3.10.1"
+    "cordis": "^3.10.4"
   },
   "dependencies": {
     "cosmokit": "^1.5.2",
-    "file-type": "^16.5.4",
     "ws": "^8.16.0"
   }
 }

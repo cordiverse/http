@@ -52,11 +52,11 @@
   ],
   "devDependencies": {
     "@types/mime-db": "^1.43.5",
-    "cordis": "^3.10.3"
+    "cordis": "^3.10.4"
   },
   "peerDependencies": {
-    "cordis": "^3.10.3",
-    "undios": "^0.1.3"
+    "cordis": "^3.10.4",
+    "undios": "^0.1.4"
   },
   "dependencies": {
     "cosmokit": "^1.5.2",

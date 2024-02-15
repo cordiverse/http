@@ -3,6 +3,8 @@ import { defineProperty, Dict, trimSlash } from 'cosmokit'
 import { ClientOptions } from 'ws'
 import { WebSocket } from 'undios/adapter'
 
+export type { WebSocket } from 'undios/adapter'
+
 declare module 'cordis' {
   interface Context {
     http: HTTP
