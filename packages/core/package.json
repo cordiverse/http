@@ -1,7 +1,7 @@
 {
   "name": "undios",
   "description": "Fetch-based axios-style HTTP client",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

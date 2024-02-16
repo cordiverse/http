@@ -208,7 +208,13 @@ export class HTTP extends Service {
     }
 
     try {
-      const init: RequestInit = { method, headers: config.headers, signal: controller.signal }
+      const init: RequestInit = {
+        method,
+        body: config.data,
+        keepalive: config.keepAlive,
+        headers: config.headers,
+        signal: controller.signal,
+      }
       caller.emit('http/fetch-init', init, config)
       const raw = await fetch(url, init).catch((cause) => {
         const error = new HTTP.Error(`fetch ${url} failed`)

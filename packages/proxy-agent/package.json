@@ -48,7 +48,7 @@
   },
   "peerDependencies": {
     "cordis": "^3.10.4",
-    "undios": "^0.1.4"
+    "undios": "^0.1.5"
   },
   "dependencies": {
     "http-proxy-agent": "^7.0.0",
