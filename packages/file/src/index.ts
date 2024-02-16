@@ -30,7 +30,7 @@ export const Config: z<Config> = z.object({})
 
 export function apply(ctx: Context, config: Config) {
   ctx.provide('http.file')
-  ctx.provide('http.local')
+  ctx.provide('http.isLocal')
 
   function createName(mime: string | undefined) {
     let name = 'file'
@@ -57,7 +57,7 @@ export function apply(ctx: Context, config: Config) {
     return { mime, filename: name, data }
   }
 
-  ctx['http.local'] = async function isLocal(url: string) {
+  ctx['http.isLocal'] = async function isLocal(url: string) {
     let { hostname, protocol } = new URL(url)
     if (protocol !== 'http:' && protocol !== 'https:') return true
     if (/^\[.+\]$/.test(hostname)) {
@@ -73,6 +73,6 @@ export function apply(ctx: Context, config: Config) {
 
   ctx.on('dispose', () => {
     ctx['http.file'] = undefined
-    ctx['http.local'] = undefined
+    ctx['http.isLocal'] = undefined
   })
 }

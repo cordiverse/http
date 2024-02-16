@@ -1,7 +1,7 @@
 {
   "name": "undios-proxy-agent",
   "description": "Proxy agent support for undios",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -48,7 +48,7 @@
   },
   "peerDependencies": {
     "cordis": "^3.10.4",
-    "undios": "^0.1.5"
+    "undios": "^0.1.9"
   },
   "dependencies": {
     "http-proxy-agent": "^7.0.0",

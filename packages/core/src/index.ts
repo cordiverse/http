@@ -21,7 +21,7 @@ declare module 'cordis' {
   }
 }
 
-const kHTTPError = Symbol.for('cordis.http.error')
+const kHTTPError = Symbol.for('undios.error')
 
 class HTTPError extends Error {
   [kHTTPError] = true
@@ -30,6 +30,18 @@ class HTTPError extends Error {
   static is(error: any): error is HTTPError {
     return !!error?.[kHTTPError]
   }
+}
+
+/**
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch
+ */
+function encodeRequest(data: any): [string | null, any] {
+  if (data instanceof URLSearchParams) return [null, data]
+  if (data instanceof ArrayBuffer) return [null, data]
+  if (ArrayBuffer.isView(data)) return [null, data]
+  if (data instanceof Blob) return [null, data]
+  if (data instanceof FormData) return [null, data]
+  return ['application/json', JSON.stringify(data)]
 }
 
 export namespace HTTP {
@@ -45,23 +57,21 @@ export namespace HTTP {
     | 'link' | 'LINK'
     | 'unlink' | 'UNLINK'
 
-  export type ResponseType =
-    | 'arraybuffer'
-    | 'json'
-    | 'text'
-    | 'stream'
+  export interface ResponseTypes {
+    text: string
+    stream: ReadableStream<Uint8Array>
+    blob: Blob
+    formdata: FormData
+    arraybuffer: ArrayBuffer
+  }
 
   export interface Request1 {
-    (url: string, config?: HTTP.RequestConfig & { responseType: 'arraybuffer' }): Promise<ArrayBuffer>
-    (url: string, config?: HTTP.RequestConfig & { responseType: 'stream' }): Promise<ReadableStream<Uint8Array>>
-    (url: string, config?: HTTP.RequestConfig & { responseType: 'text' }): Promise<string>
+    <K extends keyof ResponseTypes>(url: string, config: HTTP.RequestConfig & { responseType: K }): Promise<ResponseTypes[K]>
     <T = any>(url: string, config?: HTTP.RequestConfig): Promise<T>
   }
 
   export interface Request2 {
-    (url: string, data?: any, config?: HTTP.RequestConfig & { responseType: 'arraybuffer' }): Promise<ArrayBuffer>
-    (url: string, data?: any, config?: HTTP.RequestConfig & { responseType: 'stream' }): Promise<ReadableStream<Uint8Array>>
-    (url: string, data?: any, config?: HTTP.RequestConfig & { responseType: 'text' }): Promise<string>
+    <K extends keyof ResponseTypes>(url: string, data: any, config: HTTP.RequestConfig & { responseType: K }): Promise<ResponseTypes[K]>
     <T = any>(url: string, data?: any, config?: HTTP.RequestConfig): Promise<T>
   }
 
@@ -78,7 +88,8 @@ export namespace HTTP {
     params?: Dict
     data?: any
     keepAlive?: boolean
-    responseType?: ResponseType
+    redirect?: RequestRedirect
+    responseType?: keyof ResponseTypes
   }
 
   export interface Response<T = any> {
@@ -93,6 +104,7 @@ export namespace HTTP {
 }
 
 export interface HTTP {
+  <K extends keyof HTTP.ResponseTypes>(url: string, config: HTTP.RequestConfig & { responseType: K }): Promise<HTTP.Response<HTTP.ResponseTypes[K]>>
   <T = any>(url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
   <T = any>(method: HTTP.Method, url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
   config: HTTP.Config
@@ -111,14 +123,14 @@ export class HTTP extends Service {
   static {
     for (const method of ['get', 'delete'] as const) {
       defineProperty(HTTP.prototype, method, async function (this: HTTP, url: string, config?: HTTP.Config) {
-        const response = await this(method, url, config)
+        const response = await this(url, { method, ...config })
         return response.data
       })
     }
 
     for (const method of ['patch', 'post', 'put'] as const) {
       defineProperty(HTTP.prototype, method, async function (this: HTTP, url: string, data?: any, config?: HTTP.Config) {
-        const response = await this(method, url, { data, ...config })
+        const response = await this(url, { method, data, ...config })
         return response.data
       })
     }
@@ -176,7 +188,7 @@ export class HTTP extends Service {
   }
 
   decodeResponse(response: Response) {
-    const type = response.headers.get('content-type')
+    const type = response.headers.get('Content-Type')
     if (type?.startsWith('application/json')) {
       return response.json()
     } else if (type?.startsWith('text/')) {
@@ -194,6 +206,7 @@ export class HTTP extends Service {
     }
     const config = this.resolveConfig(args[1])
     const url = this.resolveURL(args[0], config)
+    method ??= config.method ?? 'GET'
 
     const controller = new AbortController()
     let timer: NodeJS.Timeout | number | undefined
@@ -208,12 +221,21 @@ export class HTTP extends Service {
     }
 
     try {
+      const headers = new Headers(config.headers)
       const init: RequestInit = {
         method,
+        headers,
         body: config.data,
         keepalive: config.keepAlive,
-        headers: config.headers,
+        redirect: config.redirect,
         signal: controller.signal,
+      }
+      if (config.data && typeof config.data === 'object') {
+        const [type, body] = encodeRequest(config.data)
+        init.body = body
+        if (type && !headers.has('Content-Type')) {
+          headers.append('Content-Type', type)
+        }
       }
       caller.emit('http/fetch-init', init, config)
       const raw = await fetch(url, init).catch((cause) => {
@@ -241,6 +263,12 @@ export class HTTP extends Service {
 
       if (config.responseType === 'arraybuffer') {
         response.data = await raw.arrayBuffer()
+      } else if (config.responseType === 'text') {
+        response.data = await raw.text()
+      } else if (config.responseType === 'blob') {
+        response.data = await raw.blob()
+      } else if (config.responseType === 'formdata') {
+        response.data = await raw.formData()
       } else if (config.responseType === 'stream') {
         response.data = raw.body
       } else {
@@ -253,7 +281,7 @@ export class HTTP extends Service {
   }
 
   async head(url: string, config?: HTTP.Config) {
-    const response = await this('HEAD', url, config)
+    const response = await this(url, { method: 'HEAD', ...config })
     return response.headers
   }
 
