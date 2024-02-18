@@ -1,5 +1,5 @@
 import { Context, Service } from 'cordis'
-import { defineProperty, Dict, trimSlash } from 'cosmokit'
+import { Awaitable, defineProperty, Dict, trimSlash } from 'cosmokit'
 import { ClientOptions } from 'ws'
 import { WebSocket } from 'undios/adapter'
 
@@ -58,6 +58,7 @@ export namespace HTTP {
     | 'unlink' | 'UNLINK'
 
   export interface ResponseTypes {
+    json: any
     text: string
     stream: ReadableStream<Uint8Array>
     blob: Blob
@@ -115,10 +116,13 @@ export interface HTTP {
   put: HTTP.Request2
 }
 
-export class HTTP extends Service {
+export class HTTP extends Service<HTTP.Config> {
   static Error = HTTPError
   /** @deprecated use `HTTP.Error.is()` instead */
   static isAxiosError = HTTPError.is
+
+  static [Service.provide] = 'http'
+  static [Service.immediate] = true
 
   static {
     for (const method of ['get', 'delete'] as const) {
@@ -136,25 +140,44 @@ export class HTTP extends Service {
     }
   }
 
-  constructor(ctx: Context, public config: HTTP.Config = {}, standalone?: boolean) {
-    super(ctx, 'http', { immediate: true, standalone })
+  private _decoders: Dict = Object.create(null)
+
+  constructor(config?: HTTP.Config)
+  constructor(ctx: Context, config?: HTTP.Config)
+  constructor(...args: any[]) {
+    super(args[0], args[1])
+    this.decoder('json', (raw) => raw.json())
+    this.decoder('text', (raw) => raw.text())
+    this.decoder('blob', (raw) => raw.blob())
+    this.decoder('arraybuffer', (raw) => raw.arrayBuffer())
+    this.decoder('formdata', (raw) => raw.formData())
+    this.decoder('stream', (raw) => raw.body!)
   }
 
   static mergeConfig = (target: HTTP.Config, source?: HTTP.Config) => ({
     ...target,
     ...source,
     headers: {
-      ...target.headers,
+      ...target?.headers,
       ...source?.headers,
     },
   })
 
+  decoder<K extends keyof HTTP.ResponseTypes>(type: K, decoder: (raw: Response) => Awaitable<HTTP.ResponseTypes[K]>) {
+    return this[Context.trace].effect(() => {
+      this._decoders[type] = decoder
+      return () => delete this._decoders[type]
+    })
+  }
+
   extend(config: HTTP.Config = {}) {
-    return new HTTP(this[Context.current], HTTP.mergeConfig(this.config, config), true)
+    return this[Service.extend]({
+      config: HTTP.mergeConfig(this.config, config),
+    })
   }
 
   resolveConfig(init?: HTTP.RequestConfig): HTTP.RequestConfig {
-    const caller = this[Context.current]
+    const caller = this[Context.trace]
     let result = { headers: {}, ...this.config }
     caller.emit('http/config', result)
     let intercept = caller[Context.intercept]
@@ -168,7 +191,7 @@ export class HTTP extends Service {
 
   resolveURL(url: string | URL, config: HTTP.RequestConfig) {
     if (config.endpoint) {
-      // this[Context.current].emit('internal/warning', 'endpoint is deprecated, please use baseURL instead')
+      // this[Context.trace].emit('internal/warning', 'endpoint is deprecated, please use baseURL instead')
       try {
         new URL(url)
       } catch {
@@ -187,7 +210,7 @@ export class HTTP extends Service {
     return url
   }
 
-  decodeResponse(response: Response) {
+  defaultDecoder(response: Response) {
     const type = response.headers.get('Content-Type')
     if (type?.startsWith('application/json')) {
       return response.json()
@@ -198,8 +221,8 @@ export class HTTP extends Service {
     }
   }
 
-  async [Context.invoke](...args: any[]) {
-    const caller = this[Context.current]
+  async [Service.invoke](...args: any[]) {
+    const caller = this[Context.trace]
     let method: HTTP.Method | undefined
     if (typeof args[1] === 'string' || args[1] instanceof URL) {
       method = args.shift()
@@ -252,27 +275,25 @@ export class HTTP extends Service {
         headers: raw.headers,
       }
 
-      if (!raw.ok) {
+      // we don't use `raw.ok` because it may be a 3xx redirect
+      const leading = raw.status.toString().charAt(0)
+      if (leading !== '2' && leading !== '3') {
         const error = new HTTP.Error(raw.statusText)
         error.response = response
         try {
-          response.data = await this.decodeResponse(raw)
+          response.data = await this.defaultDecoder(raw)
         } catch {}
         throw error
       }
 
-      if (config.responseType === 'arraybuffer') {
-        response.data = await raw.arrayBuffer()
-      } else if (config.responseType === 'text') {
-        response.data = await raw.text()
-      } else if (config.responseType === 'blob') {
-        response.data = await raw.blob()
-      } else if (config.responseType === 'formdata') {
-        response.data = await raw.formData()
-      } else if (config.responseType === 'stream') {
-        response.data = raw.body
+      if (config.responseType) {
+        if (!(config.responseType in this._decoders)) {
+          throw new TypeError(`Unknown responseType: ${config.responseType}`)
+        }
+        const decoder = this._decoders[config.responseType]
+        response.data = await decoder(raw)
       } else {
-        response.data = await this.decodeResponse(raw)
+        response.data = await this.defaultDecoder(raw)
       }
       return response
     } finally {
@@ -289,7 +310,7 @@ export class HTTP extends Service {
   axios<T = any>(config: { url: string } & HTTP.RequestConfig): Promise<HTTP.Response<T>>
   axios<T = any>(url: string, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
   axios(...args: any[]) {
-    const caller = this[Context.current]
+    const caller = this[Context.trace]
     caller.emit('internal/warning', 'ctx.http.axios() is deprecated, use ctx.http() instead')
     if (typeof args[0] === 'string') {
       return this(args[0], args[1])
@@ -299,7 +320,7 @@ export class HTTP extends Service {
   }
 
   async ws(this: HTTP, url: string | URL, init?: HTTP.Config) {
-    const caller = this[Context.current]
+    const caller = this[Context.trace]
     const config = this.resolveConfig(init)
     url = this.resolveURL(url, config)
     let options: ClientOptions | undefined
