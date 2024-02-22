@@ -276,8 +276,7 @@ export class HTTP extends Service<HTTP.Config> {
       }
 
       // we don't use `raw.ok` because it may be a 3xx redirect
-      const leading = raw.status.toString().charAt(0)
-      if (leading !== '2' && leading !== '3') {
+      if (raw.status >= 400) {
         const error = new HTTP.Error(raw.statusText)
         error.response = response
         try {
@@ -319,7 +318,7 @@ export class HTTP extends Service<HTTP.Config> {
     }
   }
 
-  async ws(this: HTTP, url: string | URL, init?: HTTP.Config) {
+  ws(this: HTTP, url: string | URL, init?: HTTP.Config) {
     const caller = this[Context.trace]
     const config = this.resolveConfig(init)
     url = this.resolveURL(url, config)
