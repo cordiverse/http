@@ -318,7 +318,7 @@ export class HTTP extends Service<HTTP.Config> {
     }
   }
 
-  ws(this: HTTP, url: string | URL, init?: HTTP.Config) {
+  ws(url: string | URL, init?: HTTP.Config) {
     const caller = this[Context.trace]
     const config = this.resolveConfig(init)
     url = this.resolveURL(url, config)

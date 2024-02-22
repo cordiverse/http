@@ -10,3 +10,98 @@ Fetch-based axios-style HTTP client.
 
 - Browser and Node.js support
 - Proxy agents (HTTP / HTTPS / SOCKS)
+- WebSocket
+
+## Basic Usage
+
+```ts
+import Undios from 'undios'
+
+const http = new Undios()
+
+const data = await http.get('https://example.com')
+const data = await http.post('https://example.com', body)
+const { status, data } = await http('https://example.com', { method: 'GET' })
+```
+
+## API
+
+### Static Methods
+
+### new Undios(config?)
+
+### Instance Methods
+
+#### http(url, config?)
+
+```ts
+interface HTTP {
+  <K extends keyof ResponseTypes>(url: string, config: Config & { responseType: K }): Promise<Response<ResponseTypes[K]>>
+  <T = any>(url: string | URL, config?: Config): Promise<Response<T>>
+}
+```
+
+Send a request.
+
+#### http.[get|delete|head](url, config?)
+
+```ts
+interface HTTP {
+  get: Request1
+  delete: Request1
+  head(url: string, config?: Config): Promise<Headers>
+}
+
+interface Request1 {
+  <K extends keyof ResponseTypes>(url: string, config: Config & { responseType: K }): Promise<ResponseTypes[K]>
+  <T = any>(url: string, config?: Config): Promise<T>
+}
+```
+
+Send a GET / DELETE / HEAD request.
+
+#### http.[post|put|patch](url, data, config?)
+
+```ts
+interface HTTP {
+  patch: Request2
+  post: Request2
+  put: Request2
+}
+
+interface Request2 {
+  <K extends keyof ResponseTypes>(url: string, data: any, config: Config & { responseType: K }): Promise<ResponseTypes[K]>
+  <T = any>(url: string, data?: any, config?: Config): Promise<T>
+}
+```
+
+#### http.ws(url, config?)
+
+```ts
+interface HTTP {
+  ws(url: string | URL, config?: Config): WebSocket
+}
+```
+
+Open a WebSocket connection.
+
+> ![NOTE]
+> Currently we will use [`ws`](https://github.com/websockets/ws) package to polyfill `WebSocket` in Node.js. Once Node.js has a stable WebSocket API, we will switch to it.
+
+### Config
+
+#### config.method
+
+#### config.headers
+
+#### config.params
+
+#### config.data
+
+#### config.responseType
+
+#### config.timeout
+
+#### config.proxyAgent
+
+> ![NOTE] In order to use a proxy agent, you need to install `undios-proxy-agent`.
