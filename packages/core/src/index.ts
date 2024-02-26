@@ -91,6 +91,7 @@ export namespace HTTP {
     keepAlive?: boolean
     redirect?: RequestRedirect
     responseType?: keyof ResponseTypes
+    validateStatus?: (status: number) => boolean
   }
 
   export interface Response<T = any> {
@@ -164,7 +165,7 @@ export class HTTP extends Service<HTTP.Config> {
   })
 
   decoder<K extends keyof HTTP.ResponseTypes>(type: K, decoder: (raw: Response) => Awaitable<HTTP.ResponseTypes[K]>) {
-    return this[Context.trace].effect(() => {
+    return this[Context.current].effect(() => {
       this._decoders[type] = decoder
       return () => delete this._decoders[type]
     })
@@ -177,7 +178,7 @@ export class HTTP extends Service<HTTP.Config> {
   }
 
   resolveConfig(init?: HTTP.RequestConfig): HTTP.RequestConfig {
-    const caller = this[Context.trace]
+    const caller = this[Context.current]
     let result = { headers: {}, ...this.config }
     caller.emit('http/config', result)
     let intercept = caller[Context.intercept]
@@ -191,7 +192,7 @@ export class HTTP extends Service<HTTP.Config> {
 
   resolveURL(url: string | URL, config: HTTP.RequestConfig) {
     if (config.endpoint) {
-      // this[Context.trace].emit('internal/warning', 'endpoint is deprecated, please use baseURL instead')
+      // this[Context.current].emit('internal/warning', 'endpoint is deprecated, please use baseURL instead')
       try {
         new URL(url)
       } catch {
@@ -222,7 +223,7 @@ export class HTTP extends Service<HTTP.Config> {
   }
 
   async [Service.invoke](...args: any[]) {
-    const caller = this[Context.trace]
+    const caller = this[Context.current]
     let method: HTTP.Method | undefined
     if (typeof args[1] === 'string' || args[1] instanceof URL) {
       method = args.shift()
@@ -235,11 +236,11 @@ export class HTTP extends Service<HTTP.Config> {
     let timer: NodeJS.Timeout | number | undefined
     const dispose = caller.on('dispose', () => {
       clearTimeout(timer)
-      controller.abort('context disposed')
+      controller.abort(new Error('context disposed'))
     })
     if (config.timeout) {
       timer = setTimeout(() => {
-        controller.abort('timeout')
+        controller.abort(new Error('timeout'))
       }, config.timeout)
     }
 
@@ -276,7 +277,8 @@ export class HTTP extends Service<HTTP.Config> {
       }
 
       // we don't use `raw.ok` because it may be a 3xx redirect
-      if (raw.status >= 400) {
+      const validateStatus = config.validateStatus ?? (status => status < 400)
+      if (!validateStatus(raw.status)) {
         const error = new HTTP.Error(raw.statusText)
         error.response = response
         try {
@@ -309,7 +311,7 @@ export class HTTP extends Service<HTTP.Config> {
   axios<T = any>(config: { url: string } & HTTP.RequestConfig): Promise<HTTP.Response<T>>
   axios<T = any>(url: string, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
   axios(...args: any[]) {
-    const caller = this[Context.trace]
+    const caller = this[Context.current]
     caller.emit('internal/warning', 'ctx.http.axios() is deprecated, use ctx.http() instead')
     if (typeof args[0] === 'string') {
       return this(args[0], args[1])
@@ -319,7 +321,7 @@ export class HTTP extends Service<HTTP.Config> {
   }
 
   ws(url: string | URL, init?: HTTP.Config) {
-    const caller = this[Context.trace]
+    const caller = this[Context.current]
     const config = this.resolveConfig(init)
     url = this.resolveURL(url, config)
     let options: ClientOptions | undefined
@@ -330,7 +332,7 @@ export class HTTP extends Service<HTTP.Config> {
       }
       caller.emit('http/websocket-init', options, config)
     }
-    const socket = new WebSocket(url, options)
+    const socket = new WebSocket(url, options as never)
     const dispose = caller.on('dispose', () => {
       socket.close(1001, 'context disposed')
     })

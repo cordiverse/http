@@ -83,7 +83,7 @@ Open a WebSocket connection.
 
 > [!NOTE]
 > 
-> Currently we will use [`ws`](https://github.com/websockets/ws) package to polyfill `WebSocket` in Node.js.
+> Currently we will use [`ws`](https://github.com/websockets/ws) package to polyfill [`WebSocket`](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) in Node.js.
 > 
 > Once Node.js has a stable WebSocket API, we will switch to it.
 
@@ -161,7 +161,9 @@ The request timeout in milliseconds.
 
 #### config.proxyAgent
 
-> [!NOTE] In order to use a proxy agent, you need to install `undios-proxy-agent`.
+> [!NOTE]
+> 
+> In order to use a proxy agent, you need to install `undios-proxy-agent`.
 
 ### Response
 
