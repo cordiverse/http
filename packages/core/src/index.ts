@@ -16,8 +16,8 @@ declare module 'cordis' {
 
   interface Events {
     'http/config'(config: HTTP.Config): void
-    'http/fetch-init'(init: RequestInit, config: HTTP.Config): void
-    'http/websocket-init'(init: ClientOptions, config: HTTP.Config): void
+    'http/fetch-init'(url: URL, init: RequestInit, config: HTTP.Config): void
+    'http/websocket-init'(url: URL, init: ClientOptions, config: HTTP.Config): void
   }
 }
 
@@ -261,7 +261,7 @@ export class HTTP extends Service<HTTP.Config> {
           headers.append('Content-Type', type)
         }
       }
-      caller.emit('http/fetch-init', init, config)
+      caller.emit('http/fetch-init', url, init, config)
       const raw = await fetch(url, init).catch((cause) => {
         const error = new HTTP.Error(`fetch ${url} failed`)
         error.cause = cause
@@ -330,7 +330,7 @@ export class HTTP extends Service<HTTP.Config> {
         handshakeTimeout: config?.timeout,
         headers: config?.headers,
       }
-      caller.emit('http/websocket-init', options, config)
+      caller.emit('http/websocket-init', url, options, config)
     }
     const socket = new WebSocket(url, options as never)
     const dispose = caller.on('dispose', () => {

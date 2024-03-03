@@ -13,8 +13,8 @@ import { SocksProxyAgent } from 'socks-proxy-agent'
 
 declare module 'cordis' {
   interface Events {
-    'http/dispatcher'(url: URL): Dispatcher | undefined
-    'http/legacy-agent'(url: URL): http.Agent | undefined
+    'http/dispatcher'(proxyURL: URL, requestURL: URL): Dispatcher | undefined
+    'http/legacy-agent'(proxyURL: URL, requestURL: URL): http.Agent | undefined
   }
 }
 
@@ -74,16 +74,17 @@ function socksAgent(result: ParseResult, options: SocksDispatcherOptions = {}) {
 }
 
 export const name = 'undios-proxy-agent'
+export const inject = ['http']
 
 export interface Config {}
 
 export const Config: z<Config> = z.object({})
 
 export function apply(ctx: Context, config: Config) {
-  ctx.on('http/fetch-init', (init, config) => {
+  ctx.on('http/fetch-init', (url, init, config) => {
     if (!config?.proxyAgent) return
-    const url = new URL(config.proxyAgent)
-    const agent = ctx.bail('http/dispatcher', url)
+    const proxy = new URL(config.proxyAgent)
+    const agent = ctx.bail('http/dispatcher', proxy, url)
     if (!agent) throw new Error(`Cannot resolve proxy agent ${url}`)
     init['dispatcher'] = agent
   })
@@ -97,20 +98,25 @@ export function apply(ctx: Context, config: Config) {
     return socksAgent(result)
   })
 
-  ctx.on('http/websocket-init', (init, config) => {
+  ctx.on('http/websocket-init', (url, init, config) => {
     if (!config?.proxyAgent) return
-    const url = new URL(config.proxyAgent)
-    const agent = ctx.bail('http/legacy-agent', url)
+    const proxy = new URL(config.proxyAgent)
+    const agent = ctx.bail('http/legacy-agent', proxy, url)
     if (!agent) throw new Error(`Cannot resolve proxy agent ${url}`)
     init.agent = agent
   })
 
-  ctx.on('http/legacy-agent', (url) => {
-    if (url.protocol === 'http:') return new HttpProxyAgent(url)
-    if (url.protocol === 'https:') return new HttpsProxyAgent(url)
-    const result = parseSocksURL(url)
+  ctx.on('http/legacy-agent', (proxy, url) => {
+    if (['http:', 'https:'].includes(proxy.protocol)) {
+      if (['http:', 'ws:'].includes(url.protocol)) {
+        return new HttpProxyAgent(proxy)
+      } else {
+        return new HttpsProxyAgent(proxy)
+      }
+    }
+    const result = parseSocksURL(proxy)
     if (!result) return
-    return new SocksProxyAgent(url)
+    return new SocksProxyAgent(proxy)
   })
 }
 
