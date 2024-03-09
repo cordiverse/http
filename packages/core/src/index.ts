@@ -30,6 +30,10 @@ class HTTPError extends Error {
   static is(error: any): error is HTTPError {
     return !!error?.[kHTTPError]
   }
+
+  constructor(message?: string, public code?: HTTP.Error.Code) {
+    super(message)
+  }
 }
 
 /**
@@ -103,6 +107,10 @@ export namespace HTTP {
   }
 
   export type Error = HTTPError
+
+  export namespace Error {
+    export type Code = 'ETIMEDOUT'
+  }
 }
 
 export interface HTTP {
@@ -236,11 +244,11 @@ export class HTTP extends Service<HTTP.Config> {
     let timer: NodeJS.Timeout | number | undefined
     const dispose = caller.on('dispose', () => {
       clearTimeout(timer)
-      controller.abort(new Error('context disposed'))
+      controller.abort(new HTTPError('context disposed', 'ETIMEDOUT'))
     })
     if (config.timeout) {
       timer = setTimeout(() => {
-        controller.abort(new Error('timeout'))
+        controller.abort(new HTTPError('request timeout', 'ETIMEDOUT'))
       }, config.timeout)
     }
 
@@ -263,6 +271,7 @@ export class HTTP extends Service<HTTP.Config> {
       }
       caller.emit('http/fetch-init', url, init, config)
       const raw = await fetch(url, init).catch((cause) => {
+        if (HTTP.Error.is(cause)) throw cause
         const error = new HTTP.Error(`fetch ${url} failed`)
         error.cause = cause
         throw error
