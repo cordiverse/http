@@ -14,12 +14,11 @@
     "./adapter": {
       "node": {
         "require": "./lib/adapter/node.cjs",
-        "import": "./lib/adapter/node.js"
+        "import": "./lib/adapter/node.js",
+        "types": "./lib/adapter/node.d.ts"
       },
-      "default": {
-        "import": "./lib/adapter/browser.js"
-      },
-      "types": "./lib/adapter/index.d.ts"
+      "default": "./lib/adapter/browser.js",
+      "types": "./lib/adapter/browser.d.ts"
     },
     "./package.json": "./package.json"
   },
@@ -50,11 +49,11 @@
     "plugin"
   ],
   "devDependencies": {
-    "cordis": "^3.11.0",
+    "cordis": "^3.13.3",
     "undici": "^6.6.2"
   },
   "peerDependencies": {
-    "cordis": "^3.11.0"
+    "cordis": "^3.13.3"
   },
   "dependencies": {
     "cosmokit": "^1.5.2",
