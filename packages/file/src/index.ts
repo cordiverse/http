@@ -23,6 +23,7 @@ export interface FileResponse {
 }
 
 export const name = 'undios-file'
+export const inject = ['http']
 
 export interface Config {}
 

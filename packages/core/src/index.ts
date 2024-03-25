@@ -255,12 +255,13 @@ export class HTTP extends Service<HTTP.Config> {
       const timer = config.timeout && setTimeout(() => {
         controller.abort(new HTTPError('request timeout', 'ETIMEDOUT'))
       }, config.timeout)
-      return () => {
+      return (done?: boolean) => {
         clearTimeout(timer)
+        if (done) return
         controller.abort(new HTTPError('context disposed', 'ETIMEDOUT'))
       }
     })
-    controller.signal.addEventListener('abort', dispose)
+    controller.signal.addEventListener('abort', () => dispose())
 
     try {
       const headers = new Headers(config.headers)
@@ -317,7 +318,7 @@ export class HTTP extends Service<HTTP.Config> {
       }
       return response
     } finally {
-      controller.abort()
+      dispose(true)
     }
   }
 
