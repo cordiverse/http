@@ -1,7 +1,8 @@
 import { Context, Service } from 'cordis'
-import { Awaitable, defineProperty, Dict, trimSlash } from 'cosmokit'
+import { Awaitable, defineProperty, Dict, isNullable, trimSlash } from 'cosmokit'
 import { ClientOptions } from 'ws'
 import { WebSocket } from 'undios/adapter'
+import { ReadableStream } from 'node:stream/web'
 
 export type { WebSocket } from 'undios/adapter'
 
@@ -161,7 +162,7 @@ export class HTTP extends Service<HTTP.Config> {
     this.decoder('blob', (raw) => raw.blob())
     this.decoder('arraybuffer', (raw) => raw.arrayBuffer())
     this.decoder('formdata', (raw) => raw.formData())
-    this.decoder('stream', (raw) => raw.body!)
+    this.decoder('stream', (raw) => raw.body as any)
   }
 
   static mergeConfig = (target: HTTP.Config, source?: HTTP.Config) => ({
@@ -215,6 +216,7 @@ export class HTTP extends Service<HTTP.Config> {
       throw new TypeError(`Invalid URL: ${url}`)
     }
     for (const [key, value] of Object.entries(config.params ?? {})) {
+      if (isNullable(value)) continue
       url.searchParams.append(key, value)
     }
     return url
