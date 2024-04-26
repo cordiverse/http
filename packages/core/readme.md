@@ -15,7 +15,7 @@ Fetch-based axios-style HTTP client.
 ## Basic Usage
 
 ```ts
-import Undios from 'undios'
+import Undios from '@cordisjs/plugin-http'
 
 const http = new Undios()
 
@@ -163,7 +163,7 @@ The request timeout in milliseconds.
 
 > [!NOTE]
 > 
-> In order to use a proxy agent, you need to install `undios-proxy-agent`.
+> In order to use a proxy agent, you need to install `@cordisjs/plugin-proxy-agent`.
 
 ### Response
 

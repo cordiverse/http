@@ -3,8 +3,8 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "undios": ["packages/core/src"],
-      "undios-*": ["packages/*/src"],
+      "@cordisjs/plugin-http": ["packages/core/src"],
+      "@cordisjs/*": ["packages/*/src"],
     },
   },
   "files": [],

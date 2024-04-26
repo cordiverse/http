@@ -1,3 +1,3 @@
-# undios-proxy-agent
+# @cordisjs/plugin-proxy-agent
 
-Supports HTTP, HTTPS, and SOCKS proxy agents for [undios](https://github.com/cordiverse/undios).
+Supports HTTP, HTTPS, and SOCKS proxy agents for [@cordisjs/plugin-http](https://github.com/cordiverse/http).

@@ -1,7 +1,7 @@
 // modified from https://github.com/Kaciras/fetch-socks/blob/41cec5a02c36687279ad2628f7c46327f7ff3e2d/index.ts
 // modified from https://github.com/TooTallNate/proxy-agents/blob/c881a1804197b89580320b87082971c3c6a61746/packages/socks-proxy-agent/src/index.ts
 
-import {} from 'undios'
+import {} from '@cordisjs/plugin-http'
 import * as http from 'node:http'
 import { lookup } from 'node:dns/promises'
 import { Context, z } from 'cordis'
@@ -18,7 +18,7 @@ declare module 'cordis' {
   }
 }
 
-declare module 'undios' {
+declare module '@cordisjs/plugin-http' {
   namespace HTTP {
     interface Config {
       proxyAgent?: string
@@ -73,7 +73,7 @@ function socksAgent(result: ParseResult, options: SocksDispatcherOptions = {}) {
   return new Agent({ ...rest, connect: createConnect(result, connect) })
 }
 
-export const name = 'undios-proxy-agent'
+export const name = 'proxy-agent'
 export const inject = ['http']
 
 export interface Config {}

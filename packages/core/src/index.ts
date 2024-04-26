@@ -1,10 +1,12 @@
 import { Context, Service } from 'cordis'
-import { Awaitable, defineProperty, Dict, isNullable, trimSlash } from 'cosmokit'
+import { Awaitable, Binary, defineProperty, Dict, isNullable, trimSlash } from 'cosmokit'
 import { ClientOptions } from 'ws'
-import { WebSocket } from 'undios/adapter'
+import { loadFile, lookup, WebSocket } from '@cordisjs/plugin-http/adapter'
 import { ReadableStream } from 'node:stream/web'
+import { isLocalAddress } from './utils.ts'
+import mimedb from 'mime-db'
 
-export type { WebSocket } from 'undios/adapter'
+export type { WebSocket } from '@cordisjs/plugin-http/adapter'
 
 declare module 'cordis' {
   interface Context {
@@ -22,7 +24,7 @@ declare module 'cordis' {
   }
 }
 
-const kHTTPError = Symbol.for('undios.error')
+const kHTTPError = Symbol.for('cordis.http.error')
 
 class HTTPError extends Error {
   [kHTTPError] = true
@@ -113,6 +115,16 @@ export namespace HTTP {
   export namespace Error {
     export type Code = 'ETIMEDOUT'
   }
+}
+
+export interface FileConfig {
+  timeout?: number | string
+}
+
+export interface FileResponse {
+  mime?: string
+  filename: string
+  data: ArrayBuffer
 }
 
 export interface HTTP {
@@ -362,6 +374,41 @@ export class HTTP extends Service<HTTP.Config> {
       dispose()
     })
     return socket
+  }
+
+  async file(this: HTTP, url: string, options: FileConfig = {}): Promise<FileResponse> {
+    const result = await loadFile(url)
+    if (result) return result
+    const capture = /^data:([\w/-]+);base64,(.*)$/.exec(url)
+    if (capture) {
+      const [, mime, base64] = capture
+      let name = 'file'
+      const ext = mime && mimedb[mime]?.extensions?.[0]
+      if (ext) name += `.${ext}`
+      return { mime, data: Binary.fromBase64(base64), filename: name }
+    }
+    const { headers, data, url: responseUrl } = await this<ArrayBuffer>(url, {
+      method: 'GET',
+      responseType: 'arraybuffer',
+      timeout: +options.timeout! || undefined,
+    })
+    const mime = headers.get('content-type') ?? undefined
+    const [, name] = responseUrl.match(/.+\/([^/?]*)(?=\?)?/)!
+    return { mime, filename: name, data }
+  }
+
+  async isLocal(url: string) {
+    let { hostname, protocol } = new URL(url)
+    if (protocol !== 'http:' && protocol !== 'https:') return true
+    if (/^\[.+\]$/.test(hostname)) {
+      hostname = hostname.slice(1, -1)
+    }
+    try {
+      const address = await lookup(hostname)
+      return isLocalAddress(address)
+    } catch {
+      return false
+    }
   }
 }
 

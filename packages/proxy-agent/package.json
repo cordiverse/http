@@ -1,7 +1,7 @@
 {
-  "name": "undios-proxy-agent",
-  "description": "Proxy agent support for undios",
-  "version": "0.1.4",
+  "name": "@cordisjs/plugin-proxy-agent",
+  "description": "Proxy agent support for @cordisjs/plugin-http",
+  "version": "0.3.0",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -21,13 +21,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cordiverse/undios.git",
+    "url": "git+https://github.com/cordiverse/http.git",
     "directory": "packages/proxy-agent"
   },
   "bugs": {
-    "url": "https://github.com/cordiverse/undios/issues"
+    "url": "https://github.com/cordiverse/http/issues"
   },
-  "homepage": "https://github.com/cordiverse/undios",
+  "homepage": "https://github.com/cordiverse/http",
   "keywords": [
     "http",
     "client",
@@ -44,17 +44,17 @@
     "plugin"
   ],
   "devDependencies": {
-    "cordis": "^3.10.4"
+    "cordis": "^3.13.6"
   },
   "peerDependencies": {
-    "cordis": "^3.10.4",
-    "undios": "^0.1.9"
+    "@cordisjs/plugin-http": "^0.4.0",
+    "cordis": "^3.13.6"
   },
   "dependencies": {
-    "http-proxy-agent": "^7.0.0",
-    "https-proxy-agent": "^7.0.2",
-    "socks": "^2.7.1",
+    "http-proxy-agent": "^7.0.2",
+    "https-proxy-agent": "^7.0.4",
+    "socks": "^2.8.1",
     "socks-proxy-agent": "^8.0.2",
-    "undici": "^6.6.2"
+    "undici": "^6.10.1"
   }
 }
