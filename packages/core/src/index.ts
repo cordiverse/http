@@ -141,7 +141,7 @@ export interface HTTP {
 
 export class HTTP extends Service<HTTP.Config> {
   static Error = HTTPError
-  /** @deprecated use `HTTP.Error.is()` instead */
+  /** @deprecated use `http.isError()` instead */
   static isAxiosError = HTTPError.is
 
   static [Service.provide] = 'http'
@@ -162,6 +162,8 @@ export class HTTP extends Service<HTTP.Config> {
       })
     }
   }
+
+  public isError = HTTPError.is
 
   private _decoders: Dict = Object.create(null)
 
