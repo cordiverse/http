@@ -1,24 +1,24 @@
 {
   "name": "@cordisjs/plugin-http",
   "description": "Fetch-based axios-style HTTP client",
-  "version": "0.4.0",
+  "version": "0.4.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "exports": {
     ".": {
+      "types": "./lib/index.d.ts",
       "require": "./lib/index.cjs",
-      "import": "./lib/index.js",
-      "types": "./lib/index.d.ts"
+      "import": "./lib/index.js"
     },
     "./adapter": {
+      "types": "./lib/adapter/browser.d.ts",
       "node": {
+        "types": "./lib/adapter/node.d.ts",
         "require": "./lib/adapter/node.cjs",
-        "import": "./lib/adapter/node.js",
-        "types": "./lib/adapter/node.d.ts"
+        "import": "./lib/adapter/node.js"
       },
-      "default": "./lib/adapter/browser.js",
-      "types": "./lib/adapter/browser.d.ts"
+      "default": "./lib/adapter/browser.js"
     },
     "./package.json": "./package.json"
   },
@@ -50,11 +50,11 @@
   ],
   "devDependencies": {
     "@types/mime-db": "^1.43.5",
-    "cordis": "^3.13.6",
+    "cordis": "^3.14.0",
     "undici": "^6.10.1"
   },
   "peerDependencies": {
-    "cordis": "^3.13.6"
+    "cordis": "^3.14.0"
   },
   "dependencies": {
     "cosmokit": "^1.6.2",

@@ -44,11 +44,11 @@
     "plugin"
   ],
   "devDependencies": {
-    "cordis": "^3.13.6"
+    "cordis": "^3.14.0"
   },
   "peerDependencies": {
-    "@cordisjs/plugin-http": "^0.4.0",
-    "cordis": "^3.13.6"
+    "@cordisjs/plugin-http": "^0.4.2",
+    "cordis": "^3.14.0"
   },
   "dependencies": {
     "http-proxy-agent": "^7.0.2",
