@@ -361,7 +361,7 @@ export class HTTP extends Service<HTTP.Config> {
     const config = this.resolveConfig(init)
     url = this.resolveURL(url, config)
     let options: ClientOptions | undefined
-    if ('Server' in WebSocket) {
+    if (WebSocket !== globalThis.WebSocket) {
       options = {
         handshakeTimeout: config?.timeout,
         headers: config?.headers,
