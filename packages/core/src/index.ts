@@ -18,9 +18,10 @@ declare module 'cordis' {
   }
 
   interface Events {
-    'http/config'(config: HTTP.Config): void
-    'http/fetch-init'(url: URL, init: RequestInit, config: HTTP.Config): void
-    'http/websocket-init'(url: URL, init: ClientOptions, config: HTTP.Config): void
+    'http/file'(this: HTTP, url: string, options: FileOptions): Awaitable<FileResponse | undefined>
+    'http/config'(this: HTTP, config: HTTP.Config): void
+    'http/fetch-init'(this: HTTP, url: URL, init: RequestInit, config: HTTP.Config): void
+    'http/websocket-init'(this: HTTP, url: URL, init: ClientOptions, config: HTTP.Config): void
   }
 }
 
@@ -117,7 +118,7 @@ export namespace HTTP {
   }
 }
 
-export interface FileConfig {
+export interface FileOptions {
   timeout?: number | string
 }
 
@@ -179,6 +180,7 @@ export class HTTP extends Service<HTTP.Config> {
     this.decoder('arraybuffer', (raw) => raw.arrayBuffer())
     this.decoder('formdata', (raw) => raw.formData())
     this.decoder('stream', (raw) => raw.body as any)
+    this.ctx.on('http/file', (url, options) => loadFile(url))
   }
 
   static mergeConfig = (target: HTTP.Config, source?: HTTP.Config) => ({
@@ -206,7 +208,7 @@ export class HTTP extends Service<HTTP.Config> {
   resolveConfig(init?: HTTP.RequestConfig): HTTP.RequestConfig {
     const caller = this[Context.origin]
     let result = { headers: {}, ...this.config }
-    caller.emit('http/config', result)
+    caller.emit(this, 'http/config', result)
     let intercept = caller[Context.intercept]
     while (intercept) {
       result = HTTP.mergeConfig(result, intercept.http)
@@ -299,7 +301,7 @@ export class HTTP extends Service<HTTP.Config> {
           headers.append('Content-Type', type)
         }
       }
-      caller.emit('http/fetch-init', url, init, config)
+      caller.emit(this, 'http/fetch-init', url, init, config)
       const raw = await fetch(url, init).catch((cause) => {
         if (HTTP.Error.is(cause)) throw cause
         const error = new HTTP.Error(`fetch ${url} failed`)
@@ -369,7 +371,7 @@ export class HTTP extends Service<HTTP.Config> {
         handshakeTimeout: config?.timeout,
         headers: config?.headers,
       }
-      caller.emit('http/websocket-init', url, options, config)
+      caller.emit(this, 'http/websocket-init', url, options, config)
     }
     const socket = new WebSocket(url, options as never)
     const dispose = caller.on('dispose', () => {
@@ -381,9 +383,9 @@ export class HTTP extends Service<HTTP.Config> {
     return socket
   }
 
-  async file(this: HTTP, url: string, options: FileConfig = {}): Promise<FileResponse> {
-    const result = await loadFile(url)
-    if (result) return result
+  async file(this: HTTP, url: string, options: FileOptions = {}): Promise<FileResponse> {
+    const task = await this[Context.origin].serial(this, 'http/file', url, options)
+    if (task) return task
     const capture = /^data:([\w/-]+);base64,(.*)$/.exec(url)
     if (capture) {
       const [, type, base64] = capture
