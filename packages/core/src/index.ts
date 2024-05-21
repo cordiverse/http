@@ -122,6 +122,8 @@ export interface FileConfig {
 }
 
 export interface FileResponse {
+  type: string
+  /** @deprecated use `type` instead */
   mime?: string
   filename: string
   data: ArrayBuffer
@@ -384,20 +386,20 @@ export class HTTP extends Service<HTTP.Config> {
     if (result) return result
     const capture = /^data:([\w/-]+);base64,(.*)$/.exec(url)
     if (capture) {
-      const [, mime, base64] = capture
+      const [, type, base64] = capture
       let name = 'file'
-      const ext = mime && mimedb[mime]?.extensions?.[0]
+      const ext = type && mimedb[type]?.extensions?.[0]
       if (ext) name += `.${ext}`
-      return { mime, data: Binary.fromBase64(base64), filename: name }
+      return { type, mime: type, data: Binary.fromBase64(base64), filename: name }
     }
     const { headers, data, url: responseUrl } = await this<ArrayBuffer>(url, {
       method: 'GET',
       responseType: 'arraybuffer',
       timeout: +options.timeout! || undefined,
     })
-    const mime = headers.get('content-type') ?? undefined
+    const type = headers.get('content-type')!
     const [, name] = responseUrl.match(/.+\/([^/?]*)(?=\?)?/)!
-    return { mime, filename: name, data }
+    return { type, mime: type, filename: name, data }
   }
 
   async isLocal(url: string) {
