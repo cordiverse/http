@@ -214,7 +214,7 @@ export class HTTP extends Service<HTTP.Config> {
     return result
   }
 
-  resolveURL(url: string | URL, config: HTTP.RequestConfig) {
+  resolveURL(url: string | URL, config: HTTP.RequestConfig, isWebSocket = false) {
     if (config.endpoint) {
       // this[Context.origin].emit('internal/warning', 'endpoint is deprecated, please use baseURL instead')
       try {
@@ -229,6 +229,7 @@ export class HTTP extends Service<HTTP.Config> {
       // prettify the error message
       throw new TypeError(`Invalid URL: ${url}`)
     }
+    if (isWebSocket) url.protocol = url.protocol.replace(/^http/, 'ws')
     for (const [key, value] of Object.entries(config.params ?? {})) {
       if (isNullable(value)) continue
       url.searchParams.append(key, value)
@@ -359,7 +360,7 @@ export class HTTP extends Service<HTTP.Config> {
   ws(url: string | URL, init?: HTTP.Config) {
     const caller = this[Context.origin]
     const config = this.resolveConfig(init)
-    url = this.resolveURL(url, config)
+    url = this.resolveURL(url, config, true)
     let options: ClientOptions | undefined
     if (WebSocket !== globalThis.WebSocket) {
       options = {
@@ -370,7 +371,7 @@ export class HTTP extends Service<HTTP.Config> {
     }
     const socket = new WebSocket(url, options as never)
     const dispose = caller.on('dispose', () => {
-      socket.close(1001, 'context disposed')
+      socket.close(1000, 'context disposed')
     })
     socket.addEventListener('close', () => {
       dispose()
