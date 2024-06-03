@@ -1,4 +1,4 @@
-import { Context, Service } from 'cordis'
+import { Context, Schema, Service } from 'cordis'
 import { Awaitable, Binary, defineProperty, Dict, isNullable, trimSlash } from 'cosmokit'
 import { ClientOptions } from 'ws'
 import { loadFile, lookup, WebSocket } from '@cordisjs/plugin-http/adapter'
@@ -14,7 +14,7 @@ declare module 'cordis' {
   }
 
   interface Intercept {
-    http: HTTP.Config
+    http: HTTP.Intercept
   }
 
   interface Events {
@@ -84,13 +84,15 @@ export namespace HTTP {
     <T = any>(url: string, data?: any, config?: HTTP.RequestConfig): Promise<T>
   }
 
-  export interface Config {
+  export interface Intercept {
     baseURL?: string
     /** @deprecated use `baseURL` instead */
     endpoint?: string
     headers?: Dict
     timeout?: number
   }
+
+  export interface Config extends Intercept {}
 
   export interface RequestConfig extends Config {
     method?: Method
@@ -166,6 +168,17 @@ export class HTTP extends Service<HTTP.Config> {
     }
   }
 
+  static Config: Schema<HTTP.Config> = Schema.object({
+    timeout: Schema.natural().role('ms').description('等待请求的最长时间。'),
+    keepAlive: Schema.boolean().description('是否保持连接。'),
+  })
+
+  static Intercept: Schema<HTTP.Config> = Schema.object({
+    baseURL: Schema.string().description('基础 URL。'),
+    timeout: Schema.natural().role('ms').description('等待请求的最长时间。'),
+    keepAlive: Schema.boolean().description('是否保持连接。'),
+  })
+
   public isError = HTTPError.is
 
   private _decoders: Dict = Object.create(null)
@@ -181,6 +194,7 @@ export class HTTP extends Service<HTTP.Config> {
     this.decoder('formdata', (raw) => raw.formData())
     this.decoder('stream', (raw) => raw.body as any)
     this.ctx.on('http/file', (url, options) => loadFile(url))
+    this.ctx.schema.extend('service:http', HTTP.Intercept)
   }
 
   static mergeConfig = (target: HTTP.Config, source?: HTTP.Config) => ({

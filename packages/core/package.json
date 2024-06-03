@@ -1,7 +1,7 @@
 {
   "name": "@cordisjs/plugin-http",
   "description": "Fetch-based axios-style HTTP client",
-  "version": "0.4.2",
+  "version": "0.5.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -50,11 +50,11 @@
   ],
   "devDependencies": {
     "@types/mime-db": "^1.43.5",
-    "cordis": "^3.14.0",
+    "cordis": "^3.16.1",
     "undici": "^6.10.1"
   },
   "peerDependencies": {
-    "cordis": "^3.14.0"
+    "cordis": "^3.16.1"
   },
   "dependencies": {
     "cosmokit": "^1.6.2",

@@ -4,7 +4,7 @@
 import {} from '@cordisjs/plugin-http'
 import * as http from 'node:http'
 import { lookup } from 'node:dns/promises'
-import { Context, z } from 'cordis'
+import { Context, Schema, z } from 'cordis'
 import { SocksClient, SocksProxy } from 'socks'
 import { Agent, buildConnector, Dispatcher, ProxyAgent } from 'undici'
 import { HttpProxyAgent } from 'http-proxy-agent'
@@ -20,9 +20,7 @@ declare module 'cordis' {
 
 declare module '@cordisjs/plugin-http' {
   namespace HTTP {
-    interface Config {
-      proxyAgent?: string
-    }
+    interface Intercept extends ProxyAgentConfig {}
   }
 }
 
@@ -76,15 +74,23 @@ function socksAgent(result: ParseResult, options: SocksDispatcherOptions = {}) {
 export const name = 'proxy-agent'
 export const inject = ['http']
 
-export interface Config {}
+type ProxyAgentConfig = Config
 
-export const Config: z<Config> = z.object({})
+export interface Config {
+  proxyAgent: string
+}
 
-export function apply(ctx: Context, config: Config) {
+export const Config: z<Config> = z.object({
+  proxyAgent: Schema.string().description('代理服务器地址。'),
+})
+
+export function apply(ctx: Context, _config: Config) {
+  ctx.schema.extend('service:http', Config)
+
   ctx.on('http/fetch-init', (url, init, config) => {
-    if (!config?.proxyAgent) return
-    const proxy = new URL(config.proxyAgent)
-    const agent = ctx.bail('http/dispatcher', proxy, url)
+    const proxy = config?.proxyAgent ?? _config.proxyAgent
+    if (!proxy) return
+    const agent = ctx.bail('http/dispatcher', new URL(proxy), url)
     if (!agent) throw new Error(`Cannot resolve proxy agent ${url}`)
     init['dispatcher'] = agent
   })
@@ -99,9 +105,9 @@ export function apply(ctx: Context, config: Config) {
   })
 
   ctx.on('http/websocket-init', (url, init, config) => {
-    if (!config?.proxyAgent) return
-    const proxy = new URL(config.proxyAgent)
-    const agent = ctx.bail('http/legacy-agent', proxy, url)
+    const proxy = config?.proxyAgent ?? _config.proxyAgent
+    if (!proxy) return
+    const agent = ctx.bail('http/legacy-agent', new URL(proxy), url)
     if (!agent) throw new Error(`Cannot resolve proxy agent ${url}`)
     init.agent = agent
   })
