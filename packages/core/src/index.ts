@@ -400,7 +400,8 @@ export class HTTP extends Service<HTTP.Config> {
   async file(this: HTTP, url: string, options: FileOptions = {}): Promise<FileResponse> {
     const task = await this[Context.origin].serial(this, 'http/file', url, options)
     if (task) return task
-    const capture = /^data:([\w/-]+);base64,(.*)$/.exec(url)
+    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
+    const capture = /^data:([\w/.+-]+);base64,(.*)$/.exec(url)
     if (capture) {
       const [, type, base64] = capture
       let name = 'file'
