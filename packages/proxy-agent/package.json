@@ -1,7 +1,7 @@
 {
   "name": "@cordisjs/plugin-proxy-agent",
   "description": "Proxy agent support for @cordisjs/plugin-http",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -44,11 +44,11 @@
     "plugin"
   ],
   "devDependencies": {
-    "cordis": "^3.16.1"
+    "cordis": "^3.17.4"
   },
   "peerDependencies": {
-    "@cordisjs/plugin-http": "^0.5.2",
-    "cordis": "^3.16.1"
+    "@cordisjs/plugin-http": "^0.6.0",
+    "cordis": "^3.17.4"
   },
   "dependencies": {
     "http-proxy-agent": "^7.0.2",
