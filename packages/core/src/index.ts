@@ -194,7 +194,7 @@ export class HTTP extends Service<HTTP.Config> {
     this.decoder('formdata', (raw) => raw.formData())
     this.decoder('stream', (raw) => raw.body as any)
     this.ctx.on('http/file', (url, options) => loadFile(url))
-    this.ctx.schema.extend('service:http', HTTP.Intercept)
+    this.schema?.extend(HTTP.Intercept)
   }
 
   static mergeConfig = (target: HTTP.Config, source?: HTTP.Config) => ({
@@ -207,7 +207,7 @@ export class HTTP extends Service<HTTP.Config> {
   })
 
   decoder<K extends keyof HTTP.ResponseTypes>(type: K, decoder: (raw: Response) => Awaitable<HTTP.ResponseTypes[K]>) {
-    return this[Context.origin].effect(() => {
+    return this.ctx.effect(() => {
       this._decoders[type] = decoder
       return () => delete this._decoders[type]
     })
@@ -220,10 +220,9 @@ export class HTTP extends Service<HTTP.Config> {
   }
 
   resolveConfig(init?: HTTP.RequestConfig): HTTP.RequestConfig {
-    const caller = this[Context.origin]
     let result = { headers: {}, ...this.config }
-    caller.emit(this, 'http/config', result)
-    let intercept = caller[Context.intercept]
+    this.ctx.emit(this, 'http/config', result)
+    let intercept = this.ctx[Context.intercept]
     while (intercept) {
       result = HTTP.mergeConfig(result, intercept.http)
       intercept = Object.getPrototypeOf(intercept)
@@ -234,7 +233,7 @@ export class HTTP extends Service<HTTP.Config> {
 
   resolveURL(url: string | URL, config: HTTP.RequestConfig, isWebSocket = false) {
     if (config.endpoint) {
-      // this[Context.origin].emit('internal/warning', 'endpoint is deprecated, please use baseURL instead')
+      // this.ctx.emit(this.ctx, 'internal/warning', 'endpoint is deprecated, please use baseURL instead')
       try {
         new URL(url)
       } catch {
@@ -267,7 +266,6 @@ export class HTTP extends Service<HTTP.Config> {
   }
 
   async [Service.invoke](...args: any[]) {
-    const caller = this[Context.origin]
     let method: HTTP.Method | undefined
     if (typeof args[1] === 'string' || args[1] instanceof URL) {
       method = args.shift()
@@ -286,7 +284,7 @@ export class HTTP extends Service<HTTP.Config> {
       })
     }
 
-    const dispose = caller.effect(() => {
+    const dispose = this.ctx.effect(() => {
       const timer = config.timeout && setTimeout(() => {
         controller.abort(new HTTPError('request timeout', 'ETIMEDOUT'))
       }, config.timeout)
@@ -315,7 +313,7 @@ export class HTTP extends Service<HTTP.Config> {
           headers.append('Content-Type', type)
         }
       }
-      caller.emit(this, 'http/fetch-init', url, init, config)
+      this.ctx.emit(this, 'http/fetch-init', url, init, config)
       const raw = await fetch(url, init).catch((cause) => {
         if (HTTP.Error.is(cause)) throw cause
         const error = new HTTP.Error(`fetch ${url} failed`)
@@ -366,8 +364,7 @@ export class HTTP extends Service<HTTP.Config> {
   axios<T = any>(config: { url: string } & HTTP.RequestConfig): Promise<HTTP.Response<T>>
   axios<T = any>(url: string, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
   axios(...args: any[]) {
-    const caller = this[Context.origin]
-    caller.emit('internal/warning', 'ctx.http.axios() is deprecated, use ctx.http() instead')
+    this.ctx.emit(this.ctx, 'internal/warning', 'ctx.http.axios() is deprecated, use ctx.http() instead')
     if (typeof args[0] === 'string') {
       return this(args[0], args[1])
     } else {
@@ -376,7 +373,6 @@ export class HTTP extends Service<HTTP.Config> {
   }
 
   ws(url: string | URL, init?: HTTP.Config) {
-    const caller = this[Context.origin]
     const config = this.resolveConfig(init)
     url = this.resolveURL(url, config, true)
     let options: ClientOptions | undefined
@@ -385,10 +381,10 @@ export class HTTP extends Service<HTTP.Config> {
         handshakeTimeout: config?.timeout,
         headers: config?.headers,
       }
-      caller.emit(this, 'http/websocket-init', url, options, config)
+      this.ctx.emit(this, 'http/websocket-init', url, options, config)
     }
     const socket = new WebSocket(url, options as never)
-    const dispose = caller.on('dispose', () => {
+    const dispose = this.ctx.on('dispose', () => {
       socket.close(1000, 'context disposed')
     })
     socket.addEventListener('close', () => {
@@ -398,7 +394,7 @@ export class HTTP extends Service<HTTP.Config> {
   }
 
   async file(this: HTTP, url: string, options: FileOptions = {}): Promise<FileResponse> {
-    const task = await this[Context.origin].serial(this, 'http/file', url, options)
+    const task = await this.ctx.serial(this, 'http/file', url, options)
     if (task) return task
     // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
     const capture = /^data:([\w/.+-]+);base64,(.*)$/.exec(url)

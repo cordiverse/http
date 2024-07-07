@@ -85,7 +85,7 @@ export const Config: z<Config> = z.object({
 })
 
 export function apply(ctx: Context, _config: Config) {
-  ctx.schema.extend('service:http', Config)
+  ctx.http.schema?.extend(Config)
 
   ctx.on('http/fetch-init', (url, init, config) => {
     const proxy = config?.proxyAgent ?? _config.proxyAgent
