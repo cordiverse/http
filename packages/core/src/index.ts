@@ -258,7 +258,7 @@ export class HTTP extends Service<HTTP.Config> {
     const type = response.headers.get('Content-Type')
     if (type?.startsWith('application/json')) {
       if (response.headers.get('Content-Length') === '0') {
-        return Promise.resolve({})
+        return response.text()
       }
       return response.json()
     } else if (type?.startsWith('text/')) {
