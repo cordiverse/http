@@ -76,11 +76,13 @@ export namespace HTTP {
 
   export interface Request1 {
     <K extends keyof ResponseTypes>(url: string, config: HTTP.RequestConfig & { responseType: K }): Promise<ResponseTypes[K]>
+    <T = any>(url: string, config: HTTP.RequestConfig & { responseType: Decoder<T> }): Promise<T>
     <T = any>(url: string, config?: HTTP.RequestConfig): Promise<T>
   }
 
   export interface Request2 {
     <K extends keyof ResponseTypes>(url: string, data: any, config: HTTP.RequestConfig & { responseType: K }): Promise<ResponseTypes[K]>
+    <T = any>(url: string, data: any, config: HTTP.RequestConfig & { responseType: Decoder<T> }): Promise<T>
     <T = any>(url: string, data?: any, config?: HTTP.RequestConfig): Promise<T>
   }
 
@@ -101,7 +103,7 @@ export namespace HTTP {
     keepAlive?: boolean
     redirect?: RequestRedirect
     signal?: AbortSignal
-    responseType?: keyof ResponseTypes
+    responseType?: keyof ResponseTypes | Decoder
     validateStatus?: (status: number) => boolean
   }
 
@@ -112,6 +114,8 @@ export namespace HTTP {
     statusText: string
     headers: Headers
   }
+
+  export type Decoder<T = any> = (raw: globalThis.Response) => Awaitable<T>
 
   export type Error = HTTPError
 
@@ -206,7 +210,7 @@ export class HTTP extends Service<HTTP.Config> {
     },
   })
 
-  decoder<K extends keyof HTTP.ResponseTypes>(type: K, decoder: (raw: Response) => Awaitable<HTTP.ResponseTypes[K]>) {
+  decoder<K extends keyof HTTP.ResponseTypes>(type: K, decoder: HTTP.Decoder<HTTP.ResponseTypes[K]>) {
     return this.ctx.effect(() => {
       this._decoders[type] = decoder
       return () => delete this._decoders[type]
@@ -341,10 +345,15 @@ export class HTTP extends Service<HTTP.Config> {
       }
 
       if (config.responseType) {
-        if (!(config.responseType in this._decoders)) {
-          throw new TypeError(`Unknown responseType: ${config.responseType}`)
+        let decoder: HTTP.Decoder
+        if (typeof config.responseType === 'function') {
+          decoder = config.responseType
+        } else {
+          decoder = this._decoders[config.responseType]
+          if (!decoder) {
+            throw new TypeError(`Unknown responseType: ${config.responseType}`)
+          }
         }
-        const decoder = this._decoders[config.responseType]
         response.data = await decoder(raw)
       } else {
         response.data = await this.defaultDecoder(raw)
