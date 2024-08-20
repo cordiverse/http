@@ -47,7 +47,7 @@
     "cordis": "^3.17.4"
   },
   "peerDependencies": {
-    "@cordisjs/plugin-http": "^0.6.0",
+    "@cordisjs/plugin-http": "^0.6.2",
     "cordis": "^3.17.4"
   },
   "dependencies": {

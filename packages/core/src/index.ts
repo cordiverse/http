@@ -21,6 +21,7 @@ declare module 'cordis' {
     'http/file'(this: HTTP, url: string, options: FileOptions): Awaitable<FileResponse | undefined>
     'http/config'(this: HTTP, config: HTTP.Config): void
     'http/fetch-init'(this: HTTP, url: URL, init: RequestInit, config: HTTP.Config): void
+    'http/after-fetch'(this: HTTP, data: HTTP.AfterFetch): void
     'http/websocket-init'(this: HTTP, url: URL, init: ClientOptions, config: HTTP.Config): void
   }
 }
@@ -113,6 +114,14 @@ export namespace HTTP {
     status: number
     statusText: string
     headers: Headers
+  }
+
+  export interface AfterFetch {
+    url: URL
+    init: RequestInit
+    config: RequestConfig
+    result?: globalThis.Response
+    error?: any
   }
 
   export type Decoder<T = any> = (raw: globalThis.Response) => Awaitable<T>
@@ -319,11 +328,13 @@ export class HTTP extends Service<HTTP.Config> {
       }
       this.ctx.emit(this, 'http/fetch-init', url, init, config)
       const raw = await fetch(url, init).catch((cause) => {
+        this.ctx.emit(this, 'http/after-fetch', { url, init, config, error: cause })
         if (HTTP.Error.is(cause)) throw cause
         const error = new HTTP.Error(`fetch ${url} failed`)
         error.cause = cause
         throw error
       })
+      this.ctx.emit(this, 'http/after-fetch', { url, init, config, result: raw })
 
       const response: HTTP.Response = {
         data: null,
