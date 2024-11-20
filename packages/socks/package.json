@@ -1,18 +1,10 @@
 {
-  "name": "@cordisjs/plugin-proxy-agent",
-  "description": "Proxy agent support for @cordisjs/plugin-http",
+  "name": "@cordisjs/plugin-http-socks",
+  "description": "Socks proxy agent support for @cordisjs/plugin-http",
   "version": "0.3.3",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
-  "exports": {
-    ".": {
-      "require": "./lib/index.cjs",
-      "import": "./lib/index.js",
-      "types": "./lib/index.d.ts"
-    },
-    "./package.json": "./package.json"
-  },
   "files": [
     "lib",
     "src"
@@ -22,14 +14,13 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/cordiverse/http.git",
-    "directory": "packages/proxy-agent"
+    "directory": "packages/socks"
   },
   "bugs": {
     "url": "https://github.com/cordiverse/http/issues"
   },
   "homepage": "https://github.com/cordiverse/http",
   "keywords": [
-    "http",
     "client",
     "undici",
     "fetch",
@@ -43,18 +34,22 @@
     "cordis",
     "plugin"
   ],
+  "cordis": {
+    "service": {
+      "required": [
+        "http"
+      ]
+    }
+  },
   "devDependencies": {
-    "cordis": "^4.0.0-alpha.0"
+    "cordis": "^4.0.0-alpha.0",
+    "undici": "^6.21.0"
   },
   "peerDependencies": {
     "@cordisjs/plugin-http": "^0.6.2",
     "cordis": "^4.0.0-alpha.0"
   },
   "dependencies": {
-    "http-proxy-agent": "^7.0.2",
-    "https-proxy-agent": "^7.0.4",
-    "socks": "^2.8.1",
-    "socks-proxy-agent": "^8.0.2",
-    "undici": "^6.10.1"
+    "socks": "^2.8.1"
   }
 }

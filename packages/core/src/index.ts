@@ -196,6 +196,7 @@ export class HTTP extends Service {
     proxyAgent: Schema.string().description('代理服务器地址。'),
   })
 
+  public undici = HTTP.undici
   public isError = HTTPError.is
 
   private _decoders: Dict = Object.create(null)
@@ -203,12 +204,18 @@ export class HTTP extends Service {
 
   constructor(ctx: Context, public config: HTTP.Config = {}) {
     super(ctx, 'http')
+
     this.decoder('json', (raw) => raw.json())
     this.decoder('text', (raw) => raw.text())
     this.decoder('blob', (raw) => raw.blob())
     this.decoder('arraybuffer', (raw) => raw.arrayBuffer())
     this.decoder('formdata', (raw) => raw.formData())
     this.decoder('stream', (raw) => raw.body as any)
+
+    this.proxy(['http', 'https'], (url) => {
+      return new HTTP.undici.ProxyAgent(url.href)
+    })
+
     this.ctx.on('http/file', (url, options) => loadFile(url))
     this.schema?.extend(HTTP.Intercept)
   }
@@ -336,7 +343,7 @@ export class HTTP extends Service {
 
       if (config.proxyAgent) {
         const proxyURL = new URL(config.proxyAgent)
-        const factory = this._proxies[proxyURL.protocol]
+        const factory = this._proxies[proxyURL.protocol.slice(0, -1)]
         if (!factory) throw new Error(`Cannot resolve proxy agent ${proxyURL}`)
         init.dispatcher = factory(proxyURL)
       }
@@ -417,7 +424,7 @@ export class HTTP extends Service {
 
     if (config.proxyAgent) {
       const proxyURL = new URL(config.proxyAgent)
-      const factory = this._proxies[proxyURL.protocol]
+      const factory = this._proxies[proxyURL.protocol.slice(0, -1)]
       if (!factory) throw new Error(`Cannot resolve proxy agent ${proxyURL}`)
       init.dispatcher = factory(proxyURL)
     }
