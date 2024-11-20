@@ -50,16 +50,15 @@
   ],
   "devDependencies": {
     "@types/mime-db": "^1.43.5",
-    "cordis": "^3.17.4",
-    "undici": "^6.10.1"
+    "cordis": "^4.0.0-alpha.0",
+    "undici": "^6.20.1"
   },
   "peerDependencies": {
-    "cordis": "^3.17.4"
+    "cordis": "^4.0.0-alpha.0"
   },
   "dependencies": {
-    "cosmokit": "^1.6.2",
-    "file-type": "^16.5.4",
-    "mime-db": "^1.52.0",
-    "ws": "^8.16.0"
+    "cosmokit": "^1.6.3",
+    "file-type": "^19.6.0",
+    "mime-db": "^1.53.0"
   }
 }

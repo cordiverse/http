@@ -1,12 +1,10 @@
 import { Context, Schema, Service } from 'cordis'
-import { Awaitable, Binary, defineProperty, Dict, isNullable, trimSlash } from 'cosmokit'
+import { Awaitable, Binary, defineProperty, Dict, isNullable } from 'cosmokit'
 import { ClientOptions } from 'ws'
-import { loadFile, lookup, WebSocket } from '@cordisjs/plugin-http/adapter'
+import { loadFile, lookup } from '@cordisjs/plugin-http/adapter'
 import { ReadableStream } from 'node:stream/web'
-import { isLocalAddress } from './utils.ts'
+import { isLocalAddress } from './utils'
 import mimedb from 'mime-db'
-
-export type { WebSocket } from '@cordisjs/plugin-http/adapter'
 
 declare module 'cordis' {
   interface Context {
@@ -139,8 +137,6 @@ export interface FileOptions {
 
 export interface FileResponse {
   type: string
-  /** @deprecated use `type` instead */
-  mime?: string
   filename: string
   data: ArrayBuffer
 }
@@ -157,13 +153,10 @@ export interface HTTP {
   put: HTTP.Request2
 }
 
-export class HTTP extends Service<HTTP.Config> {
+export class HTTP extends Service {
   static Error = HTTPError
   /** @deprecated use `http.isError()` instead */
   static isAxiosError = HTTPError.is
-
-  static [Service.provide] = 'http'
-  static [Service.immediate] = true
 
   static {
     for (const method of ['get', 'delete'] as const) {
@@ -196,10 +189,8 @@ export class HTTP extends Service<HTTP.Config> {
 
   private _decoders: Dict = Object.create(null)
 
-  constructor(config?: HTTP.Config)
-  constructor(ctx: Context, config?: HTTP.Config)
-  constructor(...args: any[]) {
-    super(args[0], args[1])
+  constructor(ctx: Context, public config: HTTP.Config = {}) {
+    super(ctx, 'http')
     this.decoder('json', (raw) => raw.json())
     this.decoder('text', (raw) => raw.text())
     this.decoder('blob', (raw) => raw.blob())
@@ -301,10 +292,8 @@ export class HTTP extends Service<HTTP.Config> {
       const timer = config.timeout && setTimeout(() => {
         controller.abort(new HTTPError('request timeout', 'ETIMEDOUT'))
       }, config.timeout)
-      return (done?: boolean) => {
+      return () => {
         clearTimeout(timer)
-        if (done) return
-        controller.abort(new HTTPError('context disposed', 'ETIMEDOUT'))
       }
     })
     controller.signal.addEventListener('abort', () => dispose())
@@ -371,7 +360,7 @@ export class HTTP extends Service<HTTP.Config> {
       }
       return response
     } finally {
-      dispose(true)
+      dispose()
     }
   }
 
@@ -423,7 +412,7 @@ export class HTTP extends Service<HTTP.Config> {
       let name = 'file'
       const ext = type && mimedb[type]?.extensions?.[0]
       if (ext) name += `.${ext}`
-      return { type, mime: type, data: Binary.fromBase64(base64), filename: name }
+      return { type, data: Binary.fromBase64(base64), filename: name }
     }
     const { headers, data, url: responseUrl } = await this<ArrayBuffer>(url, {
       method: 'GET',
@@ -432,7 +421,7 @@ export class HTTP extends Service<HTTP.Config> {
     })
     const type = headers.get('content-type')!
     const [, name] = responseUrl.match(/.+\/([^/?]*)(?=\?)?/)!
-    return { type, mime: type, filename: name, data }
+    return { type, filename: name, data }
   }
 
   async isLocal(url: string) {
