@@ -1,8 +1,9 @@
 import { Context, Schema, Service } from 'cordis'
 import { Awaitable, Binary, defineProperty, Dict, isNullable } from 'cosmokit'
-import { ClientOptions } from 'ws'
 import { loadFile, lookup } from '@cordisjs/plugin-http/adapter'
 import { ReadableStream } from 'node:stream/web'
+import { createRequire } from 'node:module'
+import type { Dispatcher, RequestInit, WebSocketInit } from 'undici'
 import { isLocalAddress } from './utils'
 import mimedb from 'mime-db'
 
@@ -20,7 +21,7 @@ declare module 'cordis' {
     'http/config'(this: HTTP, config: HTTP.Config): void
     'http/fetch-init'(this: HTTP, url: URL, init: RequestInit, config: HTTP.Config): void
     'http/after-fetch'(this: HTTP, data: HTTP.AfterFetch): void
-    'http/websocket-init'(this: HTTP, url: URL, init: ClientOptions, config: HTTP.Config): void
+    'http/websocket-init'(this: HTTP, url: URL, init: WebSocketInit, config: HTTP.Config): void
   }
 }
 
@@ -87,10 +88,9 @@ export namespace HTTP {
 
   export interface Intercept {
     baseURL?: string
-    /** @deprecated use `baseURL` instead */
-    endpoint?: string
     headers?: Dict
     timeout?: number
+    proxyAgent?: string
   }
 
   export interface Config extends Intercept {}
@@ -158,7 +158,16 @@ export class HTTP extends Service {
   /** @deprecated use `http.isError()` instead */
   static isAxiosError = HTTPError.is
 
+  static undici: typeof import('undici')
+
   static {
+    const require = createRequire(import.meta.url)
+    if (process.execArgv.includes('--expose-internals')) {
+      this.undici = require('internal/deps/undici/undici')
+    } else {
+      this.undici = require('undici')
+    }
+
     for (const method of ['get', 'delete'] as const) {
       defineProperty(HTTP.prototype, method, async function (this: HTTP, url: string, config?: HTTP.Config) {
         const response = await this(url, { method, ...config })
@@ -177,17 +186,20 @@ export class HTTP extends Service {
   static Config: Schema<HTTP.Config> = Schema.object({
     timeout: Schema.natural().role('ms').description('等待请求的最长时间。'),
     keepAlive: Schema.boolean().description('是否保持连接。'),
+    proxyAgent: Schema.string().description('代理服务器地址。'),
   })
 
   static Intercept: Schema<HTTP.Config> = Schema.object({
     baseURL: Schema.string().description('基础 URL。'),
     timeout: Schema.natural().role('ms').description('等待请求的最长时间。'),
     keepAlive: Schema.boolean().description('是否保持连接。'),
+    proxyAgent: Schema.string().description('代理服务器地址。'),
   })
 
   public isError = HTTPError.is
 
   private _decoders: Dict = Object.create(null)
+  private _proxies: Dict<(url: URL) => Dispatcher> = Object.create(null)
 
   constructor(ctx: Context, public config: HTTP.Config = {}) {
     super(ctx, 'http')
@@ -217,6 +229,19 @@ export class HTTP extends Service {
     })
   }
 
+  proxy(name: string[], factory: (url: URL) => Dispatcher) {
+    return this.ctx.effect(() => {
+      for (const key of name) {
+        this._proxies[key] = factory
+      }
+      return () => {
+        for (const key of name) {
+          delete this._proxies[key]
+        }
+      }
+    })
+  }
+
   extend(config: HTTP.Config = {}) {
     return this[Service.extend]({
       config: HTTP.mergeConfig(this.config, config),
@@ -236,14 +261,6 @@ export class HTTP extends Service {
   }
 
   resolveURL(url: string | URL, config: HTTP.RequestConfig, isWebSocket = false) {
-    if (config.endpoint) {
-      // this.ctx.emit(this.ctx, 'internal/warning', 'endpoint is deprecated, please use baseURL instead')
-      try {
-        new URL(url)
-      } catch {
-        url = trimSlash(config.endpoint) + url
-      }
-    }
     try {
       url = new URL(url, config.baseURL)
     } catch (error) {
@@ -308,6 +325,7 @@ export class HTTP extends Service {
         redirect: config.redirect,
         signal: controller.signal,
       }
+
       if (config.data && typeof config.data === 'object') {
         const [type, body] = encodeRequest(config.data)
         init.body = body
@@ -315,14 +333,22 @@ export class HTTP extends Service {
           headers.append('Content-Type', type)
         }
       }
+
+      if (config.proxyAgent) {
+        const proxyURL = new URL(config.proxyAgent)
+        const factory = this._proxies[proxyURL.protocol]
+        if (!factory) throw new Error(`Cannot resolve proxy agent ${proxyURL}`)
+        init.dispatcher = factory(proxyURL)
+      }
+
       this.ctx.emit(this, 'http/fetch-init', url, init, config)
-      const raw = await fetch(url, init).catch((cause) => {
+      const raw = await HTTP.undici.fetch(url, init).catch((cause) => {
         this.ctx.emit(this, 'http/after-fetch', { url, init, config, error: cause })
         if (HTTP.Error.is(cause)) throw cause
         const error = new HTTP.Error(`fetch ${url} failed`)
         error.cause = cause
         throw error
-      })
+      }) as unknown as globalThis.Response
       this.ctx.emit(this, 'http/after-fetch', { url, init, config, result: raw })
 
       const response: HTTP.Response = {
@@ -381,18 +407,23 @@ export class HTTP extends Service {
     }
   }
 
-  ws(url: string | URL, init?: HTTP.Config) {
-    const config = this.resolveConfig(init)
+  ws(url: string | URL, _config?: HTTP.Config) {
+    const config = this.resolveConfig(_config)
     url = this.resolveURL(url, config, true)
-    let options: ClientOptions | undefined
-    if (WebSocket !== globalThis.WebSocket) {
-      options = {
-        handshakeTimeout: config?.timeout,
-        headers: config?.headers,
-      }
-      this.ctx.emit(this, 'http/websocket-init', url, options, config)
+    const headers = new Headers(config.headers)
+    const init: WebSocketInit = {
+      headers,
     }
-    const socket = new WebSocket(url, options as never)
+
+    if (config.proxyAgent) {
+      const proxyURL = new URL(config.proxyAgent)
+      const factory = this._proxies[proxyURL.protocol]
+      if (!factory) throw new Error(`Cannot resolve proxy agent ${proxyURL}`)
+      init.dispatcher = factory(proxyURL)
+    }
+
+    this.ctx.emit(this, 'http/websocket-init', url, init, config)
+    const socket = new HTTP.undici.WebSocket(url, init)
     const dispose = this.ctx.on('dispose', () => {
       socket.close(1000, 'context disposed')
     })

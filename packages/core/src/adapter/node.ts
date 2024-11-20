@@ -13,7 +13,6 @@ export async function loadFile(url: string): Promise<FileResponse | undefined> {
     const result = await fileTypeFromBuffer(data)
     return {
       type: result?.mime!,
-      mime: result?.mime,
       filename: basename(url),
       data: Binary.fromSource(data),
     }
