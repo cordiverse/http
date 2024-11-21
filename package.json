@@ -1,6 +1,7 @@
 {
   "name": "@root/http",
   "private": true,
+  "packageManager": "yarn@4.5.1",
   "type": "module",
   "version": "1.0.0",
   "workspaces": [
