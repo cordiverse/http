@@ -63,7 +63,7 @@ function parseIPv6(ip: string) {
   return num
 }
 
-export async function isLocalAddress({ address, family }: LookupAddress) {
+export function isLocalAddress({ address, family }: LookupAddress) {
   if (family !== 4 && family !== 6) return false
   const { bogons, length, parse } = family === 4
     ? { bogons: bogonV4, length: 32, parse: parseIPv4 }

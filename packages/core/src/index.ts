@@ -1,4 +1,4 @@
-import { Context, Schema, Service } from 'cordis'
+import { Context, Service, z } from 'cordis'
 import { Awaitable, Binary, defineProperty, Dict, isNullable } from 'cosmokit'
 import { loadFile, lookup } from '@cordisjs/plugin-http/adapter'
 import { ReadableStream } from 'node:stream/web'
@@ -138,7 +138,7 @@ export interface FileOptions {
 export interface FileResponse {
   type: string
   filename: string
-  data: ArrayBuffer
+  data: ArrayBufferLike
 }
 
 export interface HTTP {
@@ -155,18 +155,18 @@ export interface HTTP {
 
 export class HTTP extends Service {
   static Error = HTTPError
-  /** @deprecated use `http.isError()` instead */
-  static isAxiosError = HTTPError.is
 
   static undici: typeof import('undici')
 
   static {
     const require = createRequire(import.meta.url)
-    if (process.execArgv.includes('--expose-internals')) {
-      this.undici = require('internal/deps/undici/undici')
-    } else {
-      this.undici = require('undici')
-    }
+    try {
+      if (process.execArgv.includes('--expose-internals')) {
+        this.undici = require('internal/deps/undici/undici')
+      } else {
+        this.undici = require('undici')
+      }
+    } catch {}
 
     for (const method of ['get', 'delete'] as const) {
       defineProperty(HTTP.prototype, method, async function (this: HTTP, url: string, config?: HTTP.Config) {
@@ -183,20 +183,19 @@ export class HTTP extends Service {
     }
   }
 
-  static Config: Schema<HTTP.Config> = Schema.object({
-    timeout: Schema.natural().role('ms').description('等待请求的最长时间。'),
-    keepAlive: Schema.boolean().description('是否保持连接。'),
-    proxyAgent: Schema.string().description('代理服务器地址。'),
+  static Config: z<HTTP.Config> = z.object({
+    timeout: z.natural().role('ms').description('等待请求的最长时间。'),
+    keepAlive: z.boolean().description('是否保持连接。'),
+    proxyAgent: z.string().description('代理服务器地址。'),
   })
 
-  static Intercept: Schema<HTTP.Config> = Schema.object({
-    baseURL: Schema.string().description('基础 URL。'),
-    timeout: Schema.natural().role('ms').description('等待请求的最长时间。'),
-    keepAlive: Schema.boolean().description('是否保持连接。'),
-    proxyAgent: Schema.string().description('代理服务器地址。'),
+  static Intercept: z<HTTP.Config> = z.object({
+    baseURL: z.string().description('基础 URL。'),
+    timeout: z.natural().role('ms').description('等待请求的最长时间。'),
+    keepAlive: z.boolean().description('是否保持连接。'),
+    proxyAgent: z.string().description('代理服务器地址。'),
   })
 
-  public undici = HTTP.undici
   public isError = HTTPError.is
 
   private _decoders: Dict = Object.create(null)
@@ -213,11 +212,15 @@ export class HTTP extends Service {
     this.decoder('stream', (raw) => raw.body as any)
 
     this.proxy(['http', 'https'], (url) => {
-      return new HTTP.undici.ProxyAgent(url.href)
+      return new this.undici.ProxyAgent(url.href)
     })
 
     this.ctx.on('http/file', (url, options) => loadFile(url))
-    this.schema?.extend(HTTP.Intercept)
+  }
+
+  get undici() {
+    if (HTTP.undici) return HTTP.undici
+    throw new Error('please install `undici`')
   }
 
   static mergeConfig = (target: HTTP.Config, source?: HTTP.Config) => ({
