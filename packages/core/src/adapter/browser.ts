@@ -1,7 +1,6 @@
 // Modified from https://github.com/sindresorhus/ip-regex/blob/3e220cae3eb66ecfdf4f7678bea7306ceaa41c76/index.js
 
 import { LookupAddress } from 'dns'
-import { FileResponse } from '..'
 
 const v4 = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)){3}$/
 
@@ -28,6 +27,6 @@ export async function lookup(address: string): Promise<LookupAddress> {
   throw new Error('Invalid IP address')
 }
 
-export async function loadFile(url: string): Promise<FileResponse | undefined> {
+export async function fetchFile(url: URL): Promise<Response | undefined> {
   return undefined
 }

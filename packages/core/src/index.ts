@@ -1,6 +1,6 @@
 import { Context, Service, z } from 'cordis'
 import { Awaitable, Binary, defineProperty, Dict, isNullable } from 'cosmokit'
-import { loadFile, lookup } from '@cordisjs/plugin-http/adapter'
+import { fetchFile, lookup } from '@cordisjs/plugin-http/adapter'
 import { ReadableStream } from 'node:stream/web'
 import { createRequire } from 'node:module'
 import type { Dispatcher, RequestInit, WebSocketInit } from 'undici'
@@ -17,7 +17,7 @@ declare module 'cordis' {
   }
 
   interface Events {
-    'http/file'(this: HTTP, url: string, options: FileOptions): Awaitable<FileResponse | undefined>
+    'http/fetch'(this: HTTP, url: URL, init: RequestInit, config: HTTP.Config): Awaitable<globalThis.Response | undefined>
     'http/config'(this: HTTP, config: HTTP.Config): void
     'http/fetch-init'(this: HTTP, url: URL, init: RequestInit, config: HTTP.Config): void
     'http/after-fetch'(this: HTTP, data: HTTP.AfterFetch): void
@@ -118,7 +118,7 @@ export namespace HTTP {
     url: URL
     init: RequestInit
     config: RequestConfig
-    result?: globalThis.Response
+    response?: globalThis.Response
     error?: any
   }
 
@@ -133,12 +133,6 @@ export namespace HTTP {
 
 export interface FileOptions {
   timeout?: number | string
-}
-
-export interface FileResponse {
-  type: string
-  filename: string
-  data: ArrayBufferLike
 }
 
 export interface HTTP {
@@ -215,7 +209,34 @@ export class HTTP extends Service {
       return new this.undici.ProxyAgent(url.href)
     })
 
-    this.ctx.on('http/file', (url, options) => loadFile(url))
+    this.ctx.on('http/fetch', (url, init, config) => {
+      return this.undici.fetch(url, init) as any
+    })
+
+    // file: URL
+    this.ctx.on('http/fetch', (url, init, config) => {
+      if (url.protocol !== 'file:') return
+      return fetchFile(url)
+    }, { prepend: true })
+
+    // data: URL
+    this.ctx.on('http/fetch', (url, init, config) => {
+      // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
+      const capture = /^data:([\w/.+-]+);base64,(.*)$/.exec(url.href)
+      if (!capture) return
+      const [, type, base64] = capture
+      let name = 'file'
+      const ext = type && mimedb[type]?.extensions?.[0]
+      if (ext) name += `.${ext}`
+      return new Response(Binary.fromBase64(base64), {
+        headers: {
+          'Content-Type': type,
+          'Content-Disposition': `attachment; filename="${name}"`,
+        },
+        status: 200,
+        statusText: 'OK',
+      })
+    }, { prepend: true })
   }
 
   get undici() {
@@ -352,14 +373,14 @@ export class HTTP extends Service {
       }
 
       this.ctx.emit(this, 'http/fetch-init', url, init, config)
-      const raw = await HTTP.undici.fetch(url, init).catch((cause) => {
+      const raw = (await this.ctx.serial(this, 'http/fetch', url, init, config).catch((cause) => {
         this.ctx.emit(this, 'http/after-fetch', { url, init, config, error: cause })
         if (HTTP.Error.is(cause)) throw cause
         const error = new HTTP.Error(`fetch ${url} failed`)
         error.cause = cause
         throw error
-      }) as unknown as globalThis.Response
-      this.ctx.emit(this, 'http/after-fetch', { url, init, config, result: raw })
+      }))!
+      this.ctx.emit(this, 'http/after-fetch', { url, init, config, response: raw })
 
       const response: HTTP.Response = {
         data: null,
@@ -433,7 +454,7 @@ export class HTTP extends Service {
     }
 
     this.ctx.emit(this, 'http/websocket-init', url, init, config)
-    const socket = new HTTP.undici.WebSocket(url, init)
+    const socket = new this.undici.WebSocket(url, init)
     const dispose = this.ctx.on('dispose', () => {
       socket.close(1000, 'context disposed')
     })
@@ -441,28 +462,6 @@ export class HTTP extends Service {
       dispose()
     })
     return socket
-  }
-
-  async file(this: HTTP, url: string, options: FileOptions = {}): Promise<FileResponse> {
-    const task = await this.ctx.serial(this, 'http/file', url, options)
-    if (task) return task
-    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
-    const capture = /^data:([\w/.+-]+);base64,(.*)$/.exec(url)
-    if (capture) {
-      const [, type, base64] = capture
-      let name = 'file'
-      const ext = type && mimedb[type]?.extensions?.[0]
-      if (ext) name += `.${ext}`
-      return { type, data: Binary.fromBase64(base64), filename: name }
-    }
-    const { headers, data, url: responseUrl } = await this<ArrayBuffer>(url, {
-      method: 'GET',
-      responseType: 'arraybuffer',
-      timeout: +options.timeout! || undefined,
-    })
-    const type = headers.get('content-type')!
-    const [, name] = responseUrl.match(/.+\/([^/?]*)(?=\?)?/)!
-    return { type, filename: name, data }
   }
 
   async isLocal(url: string) {
