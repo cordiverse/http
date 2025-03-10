@@ -67,7 +67,6 @@
   },
   "dependencies": {
     "cosmokit": "^1.7.3",
-    "file-type": "^19.6.0",
-    "mime-db": "^1.53.0"
+    "file-type": "^20.4.0"
   }
 }

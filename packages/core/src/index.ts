@@ -5,7 +5,6 @@ import { ReadableStream } from 'node:stream/web'
 import { createRequire } from 'node:module'
 import type { Dispatcher, RequestInit, WebSocketInit } from 'undici'
 import { isLocalAddress } from './utils'
-import mimedb from 'mime-db'
 
 declare module 'cordis' {
   interface Context {
@@ -216,7 +215,10 @@ export class HTTP extends Service {
     // file: URL
     this.ctx.on('http/fetch', (url, init, config) => {
       if (url.protocol !== 'file:') return
-      return fetchFile(url)
+      if (init.method !== 'GET') {
+        return new Response(null, { status: 405, statusText: 'Method Not Allowed' })
+      }
+      return fetchFile(url, init)
     }, { prepend: true })
 
     // data: URL
@@ -224,17 +226,14 @@ export class HTTP extends Service {
       // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
       const capture = /^data:([\w/.+-]+);base64,(.*)$/.exec(url.href)
       if (!capture) return
+      if (init.method !== 'GET') {
+        return new Response(null, { status: 405, statusText: 'Method Not Allowed' })
+      }
       const [, type, base64] = capture
-      let name = 'file'
-      const ext = type && mimedb[type]?.extensions?.[0]
-      if (ext) name += `.${ext}`
       return new Response(Binary.fromBase64(base64), {
-        headers: {
-          'Content-Type': type,
-          'Content-Disposition': `attachment; filename="${name}"`,
-        },
         status: 200,
         statusText: 'OK',
+        headers: { 'Content-Type': type },
       })
     }, { prepend: true })
   }
