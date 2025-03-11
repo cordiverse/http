@@ -7,7 +7,7 @@ import type { RequestInit } from 'undici'
 
 export { lookup } from 'node:dns/promises'
 
-export async function fetchFile(url: URL, init: RequestInit): Promise<Response | undefined> {
+export async function fetchFile(url: URL, init: RequestInit): Promise<Response> {
   try {
     const stream = Readable.toWeb(createReadStream(fileURLToPath(url))) as ReadableStream
     const result = await fileTypeFromStream(stream)

@@ -16,10 +16,8 @@ declare module 'cordis' {
   }
 
   interface Events {
-    'http/fetch'(this: HTTP, url: URL, init: RequestInit, config: HTTP.Config): Awaitable<globalThis.Response | undefined>
+    'http/fetch'(this: HTTP, url: URL, init: RequestInit, config: HTTP.Config, next: () => Promise<Response>): Promise<Response>
     'http/config'(this: HTTP, config: HTTP.Config): void
-    'http/fetch-init'(this: HTTP, url: URL, init: RequestInit, config: HTTP.Config): void
-    'http/after-fetch'(this: HTTP, data: HTTP.AfterFetch): void
     'http/websocket-init'(this: HTTP, url: URL, init: WebSocketInit, config: HTTP.Config): void
   }
 }
@@ -208,13 +206,9 @@ export class HTTP extends Service {
       return new this.undici.ProxyAgent(url.href)
     })
 
-    this.ctx.on('http/fetch', (url, init, config) => {
-      return this.undici.fetch(url, init) as any
-    })
-
     // file: URL
-    this.ctx.on('http/fetch', (url, init, config) => {
-      if (url.protocol !== 'file:') return
+    this.ctx.on('http/fetch', async (url, init, config, next) => {
+      if (url.protocol !== 'file:') return next()
       if (init.method !== 'GET') {
         return new Response(null, { status: 405, statusText: 'Method Not Allowed' })
       }
@@ -222,10 +216,10 @@ export class HTTP extends Service {
     }, { prepend: true })
 
     // data: URL
-    this.ctx.on('http/fetch', (url, init, config) => {
+    this.ctx.on('http/fetch', async (url, init, config, next) => {
       // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
       const capture = /^data:([\w/.+-]+);base64,(.*)$/.exec(url.href)
-      if (!capture) return
+      if (!capture) return next()
       if (init.method !== 'GET') {
         return new Response(null, { status: 405, statusText: 'Method Not Allowed' })
       }
@@ -371,15 +365,14 @@ export class HTTP extends Service {
         init.dispatcher = factory(proxyURL)
       }
 
-      this.ctx.emit(this, 'http/fetch-init', url, init, config)
-      const raw = (await this.ctx.serial(this, 'http/fetch', url, init, config).catch((cause) => {
-        this.ctx.emit(this, 'http/after-fetch', { url, init, config, error: cause })
+      const raw = await this.ctx.waterfall('http/fetch', url, init, config, () => {
+        return this.undici.fetch(url, init) as any
+      }).catch((cause) => {
         if (HTTP.Error.is(cause)) throw cause
         const error = new HTTP.Error(`fetch ${url} failed`)
         error.cause = cause
         throw error
-      }))!
-      this.ctx.emit(this, 'http/after-fetch', { url, init, config, response: raw })
+      })
 
       const response: HTTP.Response = {
         data: null,

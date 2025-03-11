@@ -28,6 +28,6 @@ export async function lookup(address: string): Promise<LookupAddress> {
   throw new Error('Invalid IP address')
 }
 
-export async function fetchFile(url: URL, init: RequestInit): Promise<Response | undefined> {
-  return undefined
+export async function fetchFile(url: URL, init: RequestInit): Promise<Response> {
+  return new Response(null, { status: 404, statusText: 'Not Found' })
 }
