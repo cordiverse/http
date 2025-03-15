@@ -5,19 +5,6 @@
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./lib/index.d.ts",
-      "default": "./lib/index.js"
-    },
-    "./adapter": {
-      "types": "./lib/adapter/browser.d.ts",
-      "node": "./lib/adapter/node.js",
-      "default": "./lib/adapter/browser.js"
-    },
-    "./src/*": "./src/*",
-    "./package.json": "./package.json"
-  },
   "files": [
     "lib"
   ],

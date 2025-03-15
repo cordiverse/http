@@ -1,10 +1,8 @@
 import { Context, Service, z } from 'cordis'
 import { Awaitable, Binary, defineProperty, Dict, isNullable } from 'cosmokit'
-import { lookup } from '@cordisjs/plugin-http/adapter'
 import { createRequire } from 'node:module'
 import fetchFile from '@cordisjs/fetch-file'
 import type { Dispatcher, RequestInit, WebSocketInit } from 'undici'
-import { isLocalAddress } from './utils'
 
 declare module 'cordis' {
   interface Context {
@@ -446,20 +444,6 @@ export class HTTP extends Service {
       dispose()
     })
     return socket
-  }
-
-  async isLocal(url: string | URL) {
-    let { hostname, protocol } = new URL(url)
-    if (protocol !== 'http:' && protocol !== 'https:') return true
-    if (/^\[.+\]$/.test(hostname)) {
-      hostname = hostname.slice(1, -1)
-    }
-    try {
-      const address = await lookup(hostname)
-      return isLocalAddress(address)
-    } catch {
-      return false
-    }
   }
 }
 
