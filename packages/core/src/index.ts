@@ -146,6 +146,10 @@ export interface HTTP {
 const validateStatus = (status: number) => status < 400
 
 export class HTTP extends Service {
+  static readonly inject = {
+    logger: { required: false },
+  }
+
   static Error = HTTPError
 
   static undici: typeof import('undici')
@@ -215,6 +219,7 @@ export class HTTP extends Service {
       }
       return fetchFile(url, init as globalThis.RequestInit, {
         attachment: true,
+        onError: ctx.logger?.error,
       })
     }, { prepend: true })
 
