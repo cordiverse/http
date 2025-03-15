@@ -1,7 +1,6 @@
 import { Context, Service, z } from 'cordis'
 import { Awaitable, Binary, defineProperty, Dict, isNullable } from 'cosmokit'
 import { fetchFile, lookup } from '@cordisjs/plugin-http/adapter'
-import { ReadableStream } from 'node:stream/web'
 import { createRequire } from 'node:module'
 import type { Dispatcher, RequestInit, WebSocketInit } from 'undici'
 import { isLocalAddress } from './utils'
@@ -65,22 +64,22 @@ export namespace HTTP {
   export interface ResponseTypes {
     json: any
     text: string
-    stream: ReadableStream<Uint8Array>
+    stream: ReadableStream
     blob: Blob
     formdata: FormData
     arraybuffer: ArrayBuffer
   }
 
   export interface Request1 {
-    <K extends keyof ResponseTypes>(url: string, config: HTTP.RequestConfig & { responseType: K }): Promise<ResponseTypes[K]>
-    <T = any>(url: string, config: HTTP.RequestConfig & { responseType: Decoder<T> }): Promise<T>
-    <T = any>(url: string, config?: HTTP.RequestConfig): Promise<T>
+    <K extends keyof ResponseTypes>(url: string | URL, config: HTTP.RequestConfig & { responseType: K }): Promise<ResponseTypes[K]>
+    <T = any>(url: string | URL, config: HTTP.RequestConfig & { responseType: Decoder<T> }): Promise<T>
+    <T = any>(url: string | URL, config?: HTTP.RequestConfig): Promise<T>
   }
 
   export interface Request2 {
-    <K extends keyof ResponseTypes>(url: string, data: any, config: HTTP.RequestConfig & { responseType: K }): Promise<ResponseTypes[K]>
-    <T = any>(url: string, data: any, config: HTTP.RequestConfig & { responseType: Decoder<T> }): Promise<T>
-    <T = any>(url: string, data?: any, config?: HTTP.RequestConfig): Promise<T>
+    <K extends keyof ResponseTypes>(url: string | URL, data: any, config: HTTP.RequestConfig & { responseType: K }): Promise<ResponseTypes[K]>
+    <T = any>(url: string | URL, data: any, config: HTTP.RequestConfig & { responseType: Decoder<T> }): Promise<T>
+    <T = any>(url: string | URL, data?: any, config?: HTTP.RequestConfig): Promise<T>
   }
 
   export interface Intercept {
@@ -133,7 +132,7 @@ export interface FileOptions {
 }
 
 export interface HTTP {
-  <K extends keyof HTTP.ResponseTypes>(url: string, config: HTTP.RequestConfig & { responseType: K }): Promise<HTTP.Response<HTTP.ResponseTypes[K]>>
+  <K extends keyof HTTP.ResponseTypes>(url: string | URL, config: HTTP.RequestConfig & { responseType: K }): Promise<HTTP.Response<HTTP.ResponseTypes[K]>>
   <T = any>(url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
   <T = any>(method: HTTP.Method, url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
   config: HTTP.Config
@@ -143,6 +142,9 @@ export interface HTTP {
   post: HTTP.Request2
   put: HTTP.Request2
 }
+
+// we don't use `raw.ok` because it may be a 3xx redirect
+const validateStatus = (status: number) => status < 400
 
 export class HTTP extends Service {
   static Error = HTTPError
@@ -160,15 +162,15 @@ export class HTTP extends Service {
     } catch {}
 
     for (const method of ['get', 'delete'] as const) {
-      defineProperty(HTTP.prototype, method, async function (this: HTTP, url: string, config?: HTTP.Config) {
-        const response = await this(url, { method, ...config })
+      defineProperty(HTTP.prototype, method, async function (this: HTTP, url: string | URL, config?: HTTP.Config) {
+        const response = await this(url, { method, validateStatus, ...config })
         return response.data
       })
     }
 
     for (const method of ['patch', 'post', 'put'] as const) {
-      defineProperty(HTTP.prototype, method, async function (this: HTTP, url: string, data?: any, config?: HTTP.Config) {
-        const response = await this(url, { method, data, ...config })
+      defineProperty(HTTP.prototype, method, async function (this: HTTP, url: string | URL, data?: any, config?: HTTP.Config) {
+        const response = await this(url, { method, data, validateStatus, ...config })
         return response.data
       })
     }
@@ -200,7 +202,7 @@ export class HTTP extends Service {
     this.decoder('blob', (raw) => raw.blob())
     this.decoder('arraybuffer', (raw) => raw.arrayBuffer())
     this.decoder('formdata', (raw) => raw.formData())
-    this.decoder('stream', (raw) => raw.body as any)
+    this.decoder('stream', (raw) => raw.body!)
 
     this.proxy(['http', 'https'], (url) => {
       return new this.undici.ProxyAgent(url.href)
@@ -227,7 +229,7 @@ export class HTTP extends Service {
       return new Response(Binary.fromBase64(base64), {
         status: 200,
         statusText: 'OK',
-        headers: { 'Content-Type': type },
+        headers: { 'content-type': type },
       })
     }, { prepend: true })
   }
@@ -300,7 +302,7 @@ export class HTTP extends Service {
   }
 
   defaultDecoder(response: Response) {
-    const type = response.headers.get('Content-Type')
+    const type = response.headers.get('content-type')
     if (type?.startsWith('application/json')) {
       return response.json()
     } else if (type?.startsWith('text/')) {
@@ -353,8 +355,8 @@ export class HTTP extends Service {
       if (config.data && typeof config.data === 'object') {
         const [type, body] = encodeRequest(config.data)
         init.body = body
-        if (type && !headers.has('Content-Type')) {
-          headers.append('Content-Type', type)
+        if (type && !headers.has('content-type')) {
+          headers.append('content-type', type)
         }
       }
 
@@ -382,8 +384,7 @@ export class HTTP extends Service {
         headers: raw.headers,
       }
 
-      // we don't use `raw.ok` because it may be a 3xx redirect
-      const validateStatus = config.validateStatus ?? (status => status < 400)
+      const validateStatus = config.validateStatus ?? (() => true)
       if (!validateStatus(raw.status)) {
         const error = new HTTP.Error(raw.statusText)
         error.response = response
@@ -413,8 +414,8 @@ export class HTTP extends Service {
     }
   }
 
-  async head(url: string, config?: HTTP.Config) {
-    const response = await this(url, { method: 'HEAD', ...config })
+  async head(url: string | URL, config?: HTTP.Config) {
+    const response = await this(url, { method: 'HEAD', validateStatus, ...config })
     return response.headers
   }
 
@@ -444,7 +445,7 @@ export class HTTP extends Service {
     return socket
   }
 
-  async isLocal(url: string) {
+  async isLocal(url: string | URL) {
     let { hostname, protocol } = new URL(url)
     if (protocol !== 'http:' && protocol !== 'https:') return true
     if (/^\[.+\]$/.test(hostname)) {
