@@ -1,7 +1,8 @@
 import { Context, Service, z } from 'cordis'
 import { Awaitable, Binary, defineProperty, Dict, isNullable } from 'cosmokit'
-import { fetchFile, lookup } from '@cordisjs/plugin-http/adapter'
+import { lookup } from '@cordisjs/plugin-http/adapter'
 import { createRequire } from 'node:module'
+import fetchFile from '@cordisjs/fetch-file'
 import type { Dispatcher, RequestInit, WebSocketInit } from 'undici'
 import { isLocalAddress } from './utils'
 
@@ -214,7 +215,9 @@ export class HTTP extends Service {
       if (init.method !== 'GET') {
         return new Response(null, { status: 405, statusText: 'Method Not Allowed' })
       }
-      return fetchFile(url, init)
+      return fetchFile(url, init as globalThis.RequestInit, {
+        attachment: true,
+      })
     }, { prepend: true })
 
     // data: URL

@@ -1,7 +1,6 @@
 // Modified from https://github.com/sindresorhus/ip-regex/blob/3e220cae3eb66ecfdf4f7678bea7306ceaa41c76/index.js
 
 import { LookupAddress } from 'dns'
-import type { RequestInit } from 'undici'
 
 const v4 = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)){3}$/
 
@@ -26,8 +25,4 @@ export async function lookup(address: string): Promise<LookupAddress> {
   if (v4.test(address)) return { address, family: 4 }
   if (v6.test(address)) return { address, family: 6 }
   throw new Error('Invalid IP address')
-}
-
-export async function fetchFile(url: URL, init: RequestInit): Promise<Response> {
-  return new Response(null, { status: 404, statusText: 'Not Found' })
 }

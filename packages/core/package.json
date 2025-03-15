@@ -19,8 +19,7 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "lib",
-    "src"
+    "lib"
   ],
   "author": "Shigma <shigma10826@gmail.com>",
   "license": "MIT",
@@ -61,12 +60,11 @@
     }
   },
   "devDependencies": {
-    "@types/mime-db": "^1.43.5",
     "cordis": "^4.0.0-alpha.4",
     "undici": "^6.21.0"
   },
   "dependencies": {
-    "cosmokit": "^1.7.3",
-    "file-type": "^20.4.0"
+    "@cordisjs/fetch-file": "^1.0.0",
+    "cosmokit": "^1.7.3"
   }
 }
