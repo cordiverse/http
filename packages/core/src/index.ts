@@ -219,15 +219,23 @@ export class HTTP extends Service {
     }, { prepend: true })
 
     // data: URL
+    // https://developer.mozilla.org/en-US/docs/Web/URI/Reference/Schemes/data
     this.ctx.on('http/fetch', async (url, init, config, next) => {
-      // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
-      const capture = /^data:([\w/.+-]+);base64,(.*)$/.exec(url.href)
+      // data:[<media-type>][;base64],<data>
+      const capture = /^data:([^,]*),(.*)$/.exec(url.href)
       if (!capture) return next()
       if (init.method !== 'GET') {
         return new Response(null, { status: 405, statusText: 'Method Not Allowed' })
       }
-      const [, type, base64] = capture
-      return new Response(Binary.fromBase64(base64), {
+      let [, type, data] = capture
+      let bodyInit: BodyInit = data
+      if (type.endsWith(';base64')) {
+        type = type.slice(0, -7)
+        bodyInit = Binary.fromBase64(data)
+      } else {
+        bodyInit = decodeURIComponent(data)
+      }
+      return new Response(bodyInit, {
         status: 200,
         statusText: 'OK',
         headers: { 'content-type': type },
