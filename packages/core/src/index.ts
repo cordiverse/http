@@ -418,18 +418,6 @@ export class HTTP extends Service {
     return response.headers
   }
 
-  /** @deprecated use `ctx.http()` instead */
-  axios<T = any>(config: { url: string } & HTTP.RequestConfig): Promise<HTTP.Response<T>>
-  axios<T = any>(url: string, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
-  axios(...args: any[]) {
-    this.ctx.emit(this.ctx, 'internal/warning', 'ctx.http.axios() is deprecated, use ctx.http() instead')
-    if (typeof args[0] === 'string') {
-      return this(args[0], args[1])
-    } else {
-      return this(args[0].url, args[0])
-    }
-  }
-
   ws(url: string | URL, _config?: HTTP.Config) {
     const config = this.resolveConfig(_config)
     url = this.resolveURL(url, config, true)
