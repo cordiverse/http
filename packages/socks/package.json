@@ -1,7 +1,7 @@
 {
   "name": "@cordisjs/plugin-http-socks",
   "description": "Socks proxy agent support for @cordisjs/plugin-http",
-  "version": "1.0.0-alpha.0",
+  "version": "1.0.0",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -41,12 +41,12 @@
     }
   },
   "devDependencies": {
-    "cordis": "^4.0.0-alpha.5",
+    "cordis": "^4.0.0-alpha.7",
     "undici": "^6.21.0"
   },
   "peerDependencies": {
-    "@cordisjs/plugin-http": "^1.0.0",
-    "cordis": "^4.0.0-alpha.5"
+    "@cordisjs/plugin-http": "^1.0.2",
+    "cordis": "^4.0.0-alpha.7"
   },
   "dependencies": {
     "socks": "^2.8.1"

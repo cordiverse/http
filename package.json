@@ -11,9 +11,6 @@
   "license": "MIT",
   "scripts": {
     "build": "yarn yakumo build",
-    "bump": "yarn yakumo version",
-    "dep": "yarn yakumo upgrade",
-    "pub": "yarn yakumo publish",
     "lint": "eslint --cache",
     "test": "yarn yakumo test --import tsx",
     "test:text": "shx rm -rf coverage && c8 -r text yarn test",
@@ -34,7 +31,7 @@
     "shx": "^0.3.4",
     "tsx": "npm:@cordiverse/tsx@4.19.3-fix.1",
     "typescript": "^5.8.2",
-    "yakumo": "^2.0.0-alpha.2",
+    "yakumo": "^2.0.0-alpha.3",
     "yakumo-esbuild": "^2.0.0-alpha.2",
     "yakumo-tsc": "^2.0.0-alpha.2"
   }

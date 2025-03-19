@@ -1,7 +1,7 @@
 {
   "name": "@cordisjs/plugin-http",
   "description": "Fetch-based axios-style HTTP client",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -38,7 +38,7 @@
     }
   },
   "peerDependencies": {
-    "cordis": "^4.0.0-alpha.5",
+    "cordis": "^4.0.0-alpha.7",
     "undici": "^7.5.0"
   },
   "peerDependenciesMeta": {
@@ -47,11 +47,11 @@
     }
   },
   "devDependencies": {
-    "cordis": "^4.0.0-alpha.5",
+    "cordis": "^4.0.0-alpha.7",
     "undici": "^7.5.0"
   },
   "dependencies": {
-    "@cordisjs/fetch-file": "^1.0.0",
-    "cosmokit": "^1.7.3"
+    "@cordisjs/fetch-file": "^1.0.1",
+    "cosmokit": "^1.7.4"
   }
 }

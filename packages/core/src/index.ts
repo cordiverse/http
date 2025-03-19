@@ -218,7 +218,7 @@ export class HTTP extends Service {
         return new Response(null, { status: 405, statusText: 'Method Not Allowed' })
       }
       return fetchFile(url, init as globalThis.RequestInit, {
-        attachment: true,
+        download: true,
         onError: ctx.logger?.error,
       })
     }, { prepend: true })
@@ -266,7 +266,7 @@ export class HTTP extends Service {
     return this.ctx.effect(() => {
       this._decoders[type] = decoder
       return () => delete this._decoders[type]
-    })
+    }, 'ctx.http.decoder()')
   }
 
   proxy(name: string[], factory: (url: URL) => Dispatcher) {
@@ -279,7 +279,7 @@ export class HTTP extends Service {
           delete this._proxies[key]
         }
       }
-    })
+    }, 'ctx.http.proxy()')
   }
 
   extend(config: HTTP.Config = {}) {
@@ -450,9 +450,9 @@ export class HTTP extends Service {
 
     this.ctx.emit(this, 'http/websocket-init', url, init, config)
     const socket = new this.undici.WebSocket(url, init)
-    const dispose = this.ctx.on('dispose', () => {
-      socket.close(1000, 'context disposed')
-    })
+    const dispose = this.ctx.effect(() => {
+      return () => socket.close(1000, 'context disposed')
+    }, 'new WebSocket()')
     socket.addEventListener('close', () => {
       dispose()
     })
