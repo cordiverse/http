@@ -1,4 +1,4 @@
-import { Context, Service, z } from 'cordis'
+import { Context, Inject, Service, z } from 'cordis'
 import { Awaitable, Binary, defineProperty, Dict, isNullable } from 'cosmokit'
 import { createRequire } from 'node:module'
 import fetchFile from '@cordisjs/fetch-file'
@@ -15,7 +15,6 @@ declare module 'cordis' {
 
   interface Events {
     'http/fetch'(this: HTTP, url: URL, init: RequestInit, config: HTTP.Config, next: () => Promise<Response>): Promise<Response>
-    'http/config'(this: HTTP, config: HTTP.Config): void
     'http/websocket-init'(this: HTTP, url: URL, init: WebSocketInit, config: HTTP.Config): void
   }
 }
@@ -145,11 +144,8 @@ export interface HTTP {
 // we don't use `raw.ok` because it may be a 3xx redirect
 const validateStatus = (status: number) => status < 400
 
-export class HTTP extends Service {
-  static readonly inject = {
-    logger: { required: false },
-  }
-
+@Inject('logger', false)
+export class HTTP extends Service<HTTP.Intercept> {
   static Error = HTTPError
 
   static undici: typeof import('undici')
@@ -185,7 +181,7 @@ export class HTTP extends Service {
     proxyAgent: z.string().description('代理服务器地址。'),
   })
 
-  static Intercept: z<HTTP.Config> = z.object({
+  Config: z<HTTP.Config> = z.object({
     baseURL: z.string().description('基础 URL。'),
     timeout: z.natural().role('ms').description('等待请求的最长时间。'),
     keepAlive: z.boolean().description('是否保持连接。'),
@@ -289,15 +285,7 @@ export class HTTP extends Service {
   }
 
   resolveConfig(init?: HTTP.RequestConfig): HTTP.RequestConfig {
-    let result = { headers: {}, ...this.config }
-    this.ctx.emit(this, 'http/config', result)
-    let intercept = this.ctx[Context.intercept]
-    while (intercept) {
-      result = HTTP.mergeConfig(result, intercept.http)
-      intercept = Object.getPrototypeOf(intercept)
-    }
-    result = HTTP.mergeConfig(result, init)
-    return result
+    return this[Service.resolveConfig](this.config, init)
   }
 
   resolveURL(url: string | URL, config: HTTP.RequestConfig, isWebSocket = false) {

@@ -41,14 +41,14 @@
     }
   },
   "devDependencies": {
-    "cordis": "^4.0.0-alpha.7",
-    "undici": "^6.21.0"
+    "cordis": "^4.0.0-beta.0",
+    "undici": "^7.5.0"
   },
   "peerDependencies": {
-    "@cordisjs/plugin-http": "^1.0.2",
-    "cordis": "^4.0.0-alpha.7"
+    "@cordisjs/plugin-http": "^1.1.0",
+    "cordis": "^4.0.0-beta.0"
   },
   "dependencies": {
-    "socks": "^2.8.1"
+    "socks": "^2.8.4"
   }
 }
