@@ -1,10 +1,6 @@
-# Undios
+# @cordisjs/http
 
-Fetch-based axios-style HTTP client.
-
-> "und" comes from undici, an HTTP/1.1 client officially supported by Node.js team.
-> 
-> "ios" comes from axios, a popular HTTP client for browser and Node.js.
+Fetch-based HTTP client for [Cordis](https://cordis.io).
 
 ## Features
 
@@ -12,16 +8,18 @@ Fetch-based axios-style HTTP client.
 - Proxy agents (HTTP / HTTPS / SOCKS)
 - WebSocket
 
-## Basic Usage
+## Usage
 
 ```ts
-import Undios from '@cordisjs/plugin-http'
+import { Context } from 'cordis'
+import HTTP from '@cordisjs/plugin-http'
 
-const http = new Undios()
+const ctx = new Context()
+ctx.plugin(HTTP)
 
-const data = await http.get('https://example.com')
-const data = await http.post('https://example.com', body)
-const { status, data } = await http('https://example.com', { method: 'GET' })
+const data = await ctx.http.get('https://example.com')
+const data = await ctx.http.post('https://example.com', body)
+const { status, data } = await ctx.http('https://example.com', { method: 'GET' })
 ```
 
 ## API
@@ -32,7 +30,6 @@ const { status, data } = await http('https://example.com', { method: 'GET' })
 
 ```ts
 interface HTTP {
-  <K extends keyof ResponseTypes>(url: string, config: Config & { responseType: K }): Promise<Response<ResponseTypes[K]>>
   <T = any>(url: string | URL, config?: Config): Promise<Response<T>>
 }
 ```
@@ -87,11 +84,17 @@ Open a WebSocket connection.
 > 
 > Once Node.js has a stable WebSocket API, we will switch to it.
 
+#### http.Error.is(error)
+
+```ts
+function is(error: any): error is HTTP.Error
+```
+
 ### Config
 
 ```ts
 interface Config {
-  baseURL?: string
+  baseUrl?: string
   method?: Method
   headers?: Record<string, string>
   redirect?: RequestRedirect
@@ -103,7 +106,7 @@ interface Config {
 }
 ```
 
-#### config.baseURL
+#### config.baseUrl
 
 The base URL of the request. If it is set, the `url` will be resolved against it.
 
@@ -191,17 +194,3 @@ See [Response#headers](https://developer.mozilla.org/en-US/docs/Web/API/Response
 #### response.data
 
 The decoded response body.
-
-### Static Methods
-
-```ts
-class Undios {
-  constructor(config?: Config)
-}
-```
-
-#### Undios.Error.is(error)
-
-```ts
-function is(error: any): error is Undios.Error
-```
