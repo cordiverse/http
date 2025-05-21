@@ -1,6 +1,6 @@
 // modified from https://github.com/Kaciras/fetch-socks/blob/41cec5a02c36687279ad2628f7c46327f7ff3e2d/index.ts
 
-import {} from '@cordisjs/plugin-http'
+import type {} from '@cordisjs/plugin-http'
 import { lookup } from 'node:dns/promises'
 import { Context } from 'cordis'
 import { SocksClient, SocksProxy } from 'socks'

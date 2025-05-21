@@ -2,6 +2,7 @@ import { Context, Inject, Service, z } from 'cordis'
 import { Awaitable, Binary, defineProperty, Dict, isNullable } from 'cosmokit'
 import { createRequire } from 'node:module'
 import fetchFile from '@cordisjs/fetch-file'
+import type {} from '@cordisjs/plugin-logger'
 import type { Dispatcher, RequestInit, WebSocketInit } from 'undici'
 
 declare module 'cordis' {
@@ -20,16 +21,16 @@ declare module 'cordis' {
 }
 
 const kHTTPError = Symbol.for('cordis.http.error')
+const kHTTPConfig = Symbol.for('cordis.http.config')
 
 class HTTPError extends Error {
   [kHTTPError] = true
-  response?: HTTP.Response
 
   static is(error: any): error is HTTPError {
     return !!error?.[kHTTPError]
   }
 
-  constructor(message?: string, public code?: HTTP.Error.Code) {
+  constructor(message?: string, public code?: HTTP.Error.Code, public response?: Response) {
     super(message)
   }
 }
@@ -66,6 +67,7 @@ export namespace HTTP {
     blob: Blob
     formdata: FormData
     arraybuffer: ArrayBuffer
+    headers: Headers
   }
 
   export interface Request1 {
@@ -81,7 +83,7 @@ export namespace HTTP {
   }
 
   export interface Intercept {
-    baseURL?: string
+    baseUrl?: string
     headers?: Dict
     timeout?: number
     proxyAgent?: string
@@ -121,7 +123,7 @@ export namespace HTTP {
   export type Error = HTTPError
 
   export namespace Error {
-    export type Code = 'ETIMEDOUT'
+    export type Code = 'TIMEOUT' | 'STATUS_ERROR'
   }
 }
 
@@ -130,9 +132,7 @@ export interface FileOptions {
 }
 
 export interface HTTP {
-  <K extends keyof HTTP.ResponseTypes>(url: string | URL, config: HTTP.RequestConfig & { responseType: K }): Promise<HTTP.Response<HTTP.ResponseTypes[K]>>
-  <T = any>(url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
-  <T = any>(method: HTTP.Method, url: string | URL, config?: HTTP.RequestConfig): Promise<HTTP.Response<T>>
+  (url: string | URL, config?: HTTP.RequestConfig): Promise<Response>
   config: HTTP.Config
   get: HTTP.Request1
   delete: HTTP.Request1
@@ -163,14 +163,14 @@ export class HTTP extends Service<HTTP.Intercept> {
     for (const method of ['get', 'delete'] as const) {
       defineProperty(HTTP.prototype, method, async function (this: HTTP, url: string | URL, config?: HTTP.Config) {
         const response = await this(url, { method, validateStatus, ...config })
-        return response.data
+        return this._decode(response)
       })
     }
 
     for (const method of ['patch', 'post', 'put'] as const) {
       defineProperty(HTTP.prototype, method, async function (this: HTTP, url: string | URL, data?: any, config?: HTTP.Config) {
         const response = await this(url, { method, data, validateStatus, ...config })
-        return response.data
+        return this._decode(response)
       })
     }
   }
@@ -182,7 +182,7 @@ export class HTTP extends Service<HTTP.Intercept> {
   })
 
   Config: z<HTTP.Config> = z.object({
-    baseURL: z.string().description('基础 URL。'),
+    baseUrl: z.string().description('基础 URL。'),
     timeout: z.natural().role('ms').description('等待请求的最长时间。'),
     keepAlive: z.boolean().description('是否保持连接。'),
     proxyAgent: z.string().description('代理服务器地址。'),
@@ -202,6 +202,7 @@ export class HTTP extends Service<HTTP.Intercept> {
     this.decoder('arraybuffer', (raw) => raw.arrayBuffer())
     this.decoder('formdata', (raw) => raw.formData())
     this.decoder('stream', (raw) => raw.body!)
+    this.decoder('headers', (raw) => raw.headers)
 
     this.proxy(['http', 'https'], (url) => {
       return new this.undici.ProxyAgent(url.href)
@@ -290,7 +291,7 @@ export class HTTP extends Service<HTTP.Intercept> {
 
   resolveURL(url: string | URL, config: HTTP.RequestConfig, isWebSocket = false) {
     try {
-      url = new URL(url, config.baseURL)
+      url = new URL(url, config.baseUrl)
     } catch (error) {
       // prettify the error message
       throw new TypeError(`Invalid URL: ${url}`)
@@ -335,7 +336,7 @@ export class HTTP extends Service<HTTP.Intercept> {
 
     const dispose = this.ctx.effect(() => {
       const timer = config.timeout && setTimeout(() => {
-        controller.abort(new HTTPError('request timeout', 'ETIMEDOUT'))
+        controller.abort(new HTTPError('request timeout', 'TIMEOUT'))
       }, config.timeout)
       return () => {
         clearTimeout(timer)
@@ -369,7 +370,7 @@ export class HTTP extends Service<HTTP.Intercept> {
         init.dispatcher = factory(proxyURL)
       }
 
-      const raw = await this.ctx.waterfall('http/fetch', url, init, config, () => {
+      const response = await this.ctx.waterfall('http/fetch', url, init, config, () => {
         return this.undici.fetch(url, init) as any
       }).catch((cause) => {
         if (HTTP.Error.is(cause)) throw cause
@@ -378,47 +379,39 @@ export class HTTP extends Service<HTTP.Intercept> {
         throw error
       })
 
-      const response: HTTP.Response = {
-        data: null,
-        url: raw.url,
-        status: raw.status,
-        statusText: raw.statusText,
-        headers: raw.headers,
-      }
-
-      const validateStatus = config.validateStatus ?? (() => true)
-      if (!validateStatus(raw.status)) {
-        const error = new HTTP.Error(raw.statusText)
-        error.response = response
-        try {
-          response.data = await this.defaultDecoder(raw)
-        } catch {}
-        throw error
-      }
-
-      if (config.responseType) {
-        let decoder: HTTP.Decoder
-        if (typeof config.responseType === 'function') {
-          decoder = config.responseType
-        } else {
-          decoder = this._decoders[config.responseType]
-          if (!decoder) {
-            throw new TypeError(`Unknown responseType: ${config.responseType}`)
-          }
-        }
-        response.data = await decoder(raw)
-      } else {
-        response.data = await this.defaultDecoder(raw)
-      }
+      response[kHTTPConfig] = config
       return response
     } finally {
       dispose()
     }
   }
 
-  async head(url: string | URL, config?: HTTP.Config) {
-    const response = await this(url, { method: 'HEAD', validateStatus, ...config })
-    return response.headers
+  private async _decode(response: Response) {
+    const config: HTTP.RequestConfig = response[kHTTPConfig]
+    const validateStatus = config.validateStatus ?? (() => true)
+    if (!validateStatus(response.status)) {
+      throw new HTTP.Error(response.statusText, 'STATUS_ERROR', response)
+    }
+
+    if (!config.responseType) {
+      return this.defaultDecoder(response)
+    }
+
+    let decoder: HTTP.Decoder
+    if (typeof config.responseType === 'function') {
+      decoder = config.responseType
+    } else {
+      decoder = this._decoders[config.responseType]
+      if (!decoder) {
+        throw new TypeError(`Unknown responseType: ${config.responseType}`)
+      }
+    }
+    return decoder(response)
+  }
+
+  async head(url: string | URL, config?: HTTP.RequestConfig) {
+    const response = await this(url, { method: 'HEAD', responseType: 'headers', ...config })
+    return this._decode(response)
   }
 
   ws(url: string | URL, _config?: HTTP.Config) {
