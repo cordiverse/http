@@ -414,6 +414,8 @@ export class HTTP extends Service<HTTP.Config> {
   }
 
   async file(this: HTTP, url: string, options: FileOptions = {}): Promise<FileResponse> {
+    const config = this.resolveConfig()
+    url = this.resolveURL(url, config).toString()
     const task = await this.ctx.serial(this, 'http/file', url, options)
     if (task) return task
     // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
