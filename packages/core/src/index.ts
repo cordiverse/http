@@ -1,9 +1,10 @@
-import { Context, Inject, Service, z } from 'cordis'
+import { Context, Inject, Service } from 'cordis'
 import { Awaitable, Binary, defineProperty, Dict, isNullable } from 'cosmokit'
 import { createRequire } from 'node:module'
 import fetchFile from '@cordisjs/fetch-file'
 import type {} from '@cordisjs/plugin-logger'
 import type { Dispatcher, RequestInit, WebSocketInit } from 'undici'
+import z from 'schemastery'
 
 declare module 'cordis' {
   interface Context {
