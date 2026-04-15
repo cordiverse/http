@@ -3,7 +3,7 @@ import { Awaitable, Binary, defineProperty, Dict, isNullable } from 'cosmokit'
 import { createRequire } from 'node:module'
 import fetchFile from '@cordisjs/fetch-file'
 import type {} from '@cordisjs/plugin-logger'
-import type { Dispatcher, RequestInit, WebSocketInit } from 'undici'
+import type { Dispatcher, HeadersInit, RequestInit, WebSocketInit } from 'undici'
 import z from 'schemastery'
 
 declare module 'cordis' {
@@ -45,6 +45,7 @@ function encodeRequest(data: any): [string | null, any] {
   if (ArrayBuffer.isView(data)) return [null, data]
   if (data instanceof Blob) return [null, data]
   if (data instanceof FormData) return [null, data]
+  if (data instanceof ReadableStream) return [null, data]
   return ['application/json', JSON.stringify(data)]
 }
 
@@ -349,7 +350,7 @@ export class HTTP extends Service<HTTP.Intercept> {
       const headers = new Headers(config.headers)
       const init: RequestInit = {
         method,
-        headers,
+        headers: headers as any,
         body: config.data,
         keepalive: config.keepAlive,
         redirect: config.redirect,
@@ -362,6 +363,10 @@ export class HTTP extends Service<HTTP.Intercept> {
         if (type && !headers.has('content-type')) {
           headers.append('content-type', type)
         }
+      }
+
+      if (init.body) {
+        (init as any).duplex = 'half'
       }
 
       if (config.proxyAgent) {
@@ -418,7 +423,7 @@ export class HTTP extends Service<HTTP.Intercept> {
   ws(url: string | URL, _config?: HTTP.Config) {
     const config = this.resolveConfig(_config)
     url = this.resolveURL(url, config, true)
-    const headers = new Headers(config.headers)
+    const headers = new Headers(config.headers) as unknown as HeadersInit
     const init: WebSocketInit = {
       headers,
     }
