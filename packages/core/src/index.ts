@@ -50,18 +50,6 @@ function encodeRequest(data: any): [string | null, any] {
 }
 
 export namespace HTTP {
-  export type Method =
-    | 'get' | 'GET'
-    | 'delete' | 'DELETE'
-    | 'head' | 'HEAD'
-    | 'options' | 'OPTIONS'
-    | 'post' | 'POST'
-    | 'put' | 'PUT'
-    | 'patch' | 'PATCH'
-    | 'purge' | 'PURGE'
-    | 'link' | 'LINK'
-    | 'unlink' | 'UNLINK'
-
   export interface ResponseTypes {
     json: any
     text: string
@@ -94,7 +82,7 @@ export namespace HTTP {
   export interface Config extends Intercept {}
 
   export interface RequestConfig extends Config {
-    method?: Method
+    method?: string
     params?: Dict
     data?: any
     keepAlive?: boolean
@@ -318,7 +306,7 @@ export class HTTP extends Service<HTTP.Intercept> {
   }
 
   async [Service.invoke](...args: any[]) {
-    let method: HTTP.Method | undefined
+    let method: string | undefined
     if (typeof args[1] === 'string' || args[1] instanceof URL) {
       method = args.shift()
     }
