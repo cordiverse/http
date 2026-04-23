@@ -3,7 +3,7 @@ import { Awaitable, Binary, defineProperty, Dict, isNullable } from 'cosmokit'
 import { createRequire } from 'node:module'
 import fetchFile from '@cordisjs/fetch-file'
 import type {} from '@cordisjs/plugin-logger'
-import type { Dispatcher, HeadersInit, RequestInit, WebSocketInit } from 'undici'
+import type { Dispatcher, HeadersInit, RequestInit, WebSocket, WebSocketInit } from 'undici'
 import z from 'schemastery'
 
 declare module 'cordis' {
@@ -17,7 +17,7 @@ declare module 'cordis' {
 
   interface Events {
     'http/fetch'(this: HTTP, url: URL, init: RequestInit, config: HTTP.Config, next: () => Promise<Response>): Promise<Response>
-    'http/websocket-init'(this: HTTP, url: URL, init: WebSocketInit, config: HTTP.Config): void
+    'http/websocket'(this: HTTP, url: URL, init: WebSocketInit, config: HTTP.Config, next: () => WebSocket): WebSocket
   }
 }
 
@@ -364,7 +364,7 @@ export class HTTP extends Service<HTTP.Intercept> {
         init.dispatcher = factory(proxyURL)
       }
 
-      const response = await this.ctx.waterfall('http/fetch', url, init, config, () => {
+      const response = await this.ctx.waterfall(this, 'http/fetch', url, init, config, () => {
         return this.undici.fetch(url, init) as any
       }).catch((cause) => {
         if (HTTP.Error.is(cause)) throw cause
@@ -423,8 +423,9 @@ export class HTTP extends Service<HTTP.Intercept> {
       init.dispatcher = factory(proxyURL)
     }
 
-    this.ctx.emit(this, 'http/websocket-init', url, init, config)
-    const socket = new this.undici.WebSocket(url, init)
+    const socket = this.ctx.waterfall(this, 'http/websocket', url, init, config, () => {
+      return new this.undici.WebSocket(url, init)
+    })
     const dispose = this.ctx.effect(() => {
       return () => socket.close(1000, 'context disposed')
     }, 'new WebSocket()')
