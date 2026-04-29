@@ -8,30 +8,30 @@ import z from 'schemastery'
 
 declare module 'cordis' {
   interface Context {
-    http: HTTP
+    http: Http
   }
 
   interface Intercept {
-    http: HTTP.Intercept
+    http: Http.Intercept
   }
 
   interface Events {
-    'http/fetch'(this: HTTP, url: URL, init: RequestInit, config: HTTP.Config, next: () => Promise<Response>): Promise<Response>
-    'http/websocket'(this: HTTP, url: URL, init: WebSocketInit, config: HTTP.Config, next: () => WebSocket): WebSocket
+    'http/fetch'(this: Http, url: URL, init: RequestInit, config: Http.Config, next: () => Promise<Response>): Promise<Response>
+    'http/websocket'(this: Http, url: URL, init: WebSocketInit, config: Http.Config, next: () => WebSocket): WebSocket
   }
 }
 
-const kHTTPError = Symbol.for('cordis.http.error')
-const kHTTPConfig = Symbol.for('cordis.http.config')
+const kHttpError = Symbol.for('cordis.http.error')
+const kHttpConfig = Symbol.for('cordis.http.config')
 
-class HTTPError extends Error {
-  [kHTTPError] = true
+class HttpError extends Error {
+  [kHttpError] = true
 
-  static is(error: any): error is HTTPError {
-    return !!error?.[kHTTPError]
+  static is(error: any): error is HttpError {
+    return !!error?.[kHttpError]
   }
 
-  constructor(message?: string, public code?: HTTP.Error.Code, public response?: Response) {
+  constructor(message?: string, public code?: Http.Error.Code, public response?: Response) {
     super(message)
   }
 }
@@ -49,7 +49,7 @@ function encodeRequest(data: any): [string | null, any] {
   return ['application/json', JSON.stringify(data)]
 }
 
-export namespace HTTP {
+export namespace Http {
   export interface ResponseTypes {
     json: any
     text: string
@@ -61,15 +61,15 @@ export namespace HTTP {
   }
 
   export interface Request1 {
-    <K extends keyof ResponseTypes>(url: string | URL, config: HTTP.RequestConfig & { responseType: K }): Promise<ResponseTypes[K]>
-    <T = any>(url: string | URL, config: HTTP.RequestConfig & { responseType: Decoder<T> }): Promise<T>
-    <T = any>(url: string | URL, config?: HTTP.RequestConfig): Promise<T>
+    <K extends keyof ResponseTypes>(url: string | URL, config: Http.RequestConfig & { responseType: K }): Promise<ResponseTypes[K]>
+    <T = any>(url: string | URL, config: Http.RequestConfig & { responseType: Decoder<T> }): Promise<T>
+    <T = any>(url: string | URL, config?: Http.RequestConfig): Promise<T>
   }
 
   export interface Request2 {
-    <K extends keyof ResponseTypes>(url: string | URL, data: any, config: HTTP.RequestConfig & { responseType: K }): Promise<ResponseTypes[K]>
-    <T = any>(url: string | URL, data: any, config: HTTP.RequestConfig & { responseType: Decoder<T> }): Promise<T>
-    <T = any>(url: string | URL, data?: any, config?: HTTP.RequestConfig): Promise<T>
+    <K extends keyof ResponseTypes>(url: string | URL, data: any, config: Http.RequestConfig & { responseType: K }): Promise<ResponseTypes[K]>
+    <T = any>(url: string | URL, data: any, config: Http.RequestConfig & { responseType: Decoder<T> }): Promise<T>
+    <T = any>(url: string | URL, data?: any, config?: Http.RequestConfig): Promise<T>
   }
 
   export interface Intercept {
@@ -110,7 +110,7 @@ export namespace HTTP {
 
   export type Decoder<T = any> = (raw: globalThis.Response) => Awaitable<T>
 
-  export type Error = HTTPError
+  export type Error = HttpError
 
   export namespace Error {
     export type Code = 'TIMEOUT' | 'STATUS_ERROR'
@@ -121,22 +121,22 @@ export interface FileOptions {
   timeout?: number | string
 }
 
-export interface HTTP {
-  (url: string | URL, config?: HTTP.RequestConfig): Promise<Response>
-  config: HTTP.Config
-  get: HTTP.Request1
-  delete: HTTP.Request1
-  patch: HTTP.Request2
-  post: HTTP.Request2
-  put: HTTP.Request2
+export interface Http {
+  (url: string | URL, config?: Http.RequestConfig): Promise<Response>
+  config: Http.Config
+  get: Http.Request1
+  delete: Http.Request1
+  patch: Http.Request2
+  post: Http.Request2
+  put: Http.Request2
 }
 
 // we don't use `raw.ok` because it may be a 3xx redirect
 const validateStatus = (status: number) => status < 400
 
-@Inject('logger', false)
-export class HTTP extends Service<HTTP.Intercept> {
-  static Error = HTTPError
+@Inject('logger')
+export class Http extends Service<Http.Intercept> {
+  static Error = HttpError
 
   static undici: typeof import('undici')
 
@@ -151,39 +151,39 @@ export class HTTP extends Service<HTTP.Intercept> {
     } catch {}
 
     for (const method of ['get', 'delete'] as const) {
-      defineProperty(HTTP.prototype, method, async function (this: HTTP, url: string | URL, config?: HTTP.Config) {
+      defineProperty(Http.prototype, method, async function (this: Http, url: string | URL, config?: Http.Config) {
         const response = await this(url, { method, validateStatus, ...config })
         return this._decode(response)
       })
     }
 
     for (const method of ['patch', 'post', 'put'] as const) {
-      defineProperty(HTTP.prototype, method, async function (this: HTTP, url: string | URL, data?: any, config?: HTTP.Config) {
+      defineProperty(Http.prototype, method, async function (this: Http, url: string | URL, data?: any, config?: Http.Config) {
         const response = await this(url, { method, data, validateStatus, ...config })
         return this._decode(response)
       })
     }
   }
 
-  static Config: z<HTTP.Config> = z.object({
+  static Config: z<Http.Config> = z.object({
     timeout: z.natural().role('ms').description('等待请求的最长时间。'),
     keepAlive: z.boolean().description('是否保持连接。'),
     proxyAgent: z.string().description('代理服务器地址。'),
   })
 
-  Config: z<HTTP.Config> = z.object({
+  Config: z<Http.Config> = z.object({
     baseUrl: z.string().description('基础 URL。'),
     timeout: z.natural().role('ms').description('等待请求的最长时间。'),
     keepAlive: z.boolean().description('是否保持连接。'),
     proxyAgent: z.string().description('代理服务器地址。'),
   })
 
-  public isError = HTTPError.is
+  public isError = HttpError.is
 
   private _decoders: Dict = Object.create(null)
   private _proxies: Dict<(url: URL) => Dispatcher> = Object.create(null)
 
-  constructor(ctx: Context, public config: HTTP.Config = {}) {
+  constructor(ctx: Context, public config: Http.Config = {}) {
     super(ctx, 'http')
 
     this.decoder('json', (raw) => raw.json())
@@ -206,7 +206,7 @@ export class HTTP extends Service<HTTP.Intercept> {
       }
       return fetchFile(url, init as globalThis.RequestInit, {
         download: true,
-        onError: ctx.logger?.error,
+        onError: ctx.logger.error,
       })
     }, { prepend: true })
 
@@ -236,11 +236,11 @@ export class HTTP extends Service<HTTP.Intercept> {
   }
 
   get undici() {
-    if (HTTP.undici) return HTTP.undici
+    if (Http.undici) return Http.undici
     throw new Error('please install `undici`')
   }
 
-  static mergeConfig = (target: HTTP.Config, source?: HTTP.Config) => ({
+  static mergeConfig = (target: Http.Config, source?: Http.Config) => ({
     ...target,
     ...source,
     headers: {
@@ -249,7 +249,7 @@ export class HTTP extends Service<HTTP.Intercept> {
     },
   })
 
-  decoder<K extends keyof HTTP.ResponseTypes>(type: K, decoder: HTTP.Decoder<HTTP.ResponseTypes[K]>) {
+  decoder<K extends keyof Http.ResponseTypes>(type: K, decoder: Http.Decoder<Http.ResponseTypes[K]>) {
     return this.ctx.effect(() => {
       this._decoders[type] = decoder
       return () => delete this._decoders[type]
@@ -269,17 +269,17 @@ export class HTTP extends Service<HTTP.Intercept> {
     }, 'ctx.http.proxy()')
   }
 
-  extend(config: HTTP.Config = {}) {
+  extend(config: Http.Config = {}) {
     return this[Service.extend]({
-      config: HTTP.mergeConfig(this.config, config),
+      config: Http.mergeConfig(this.config, config),
     })
   }
 
-  resolveConfig(init?: HTTP.RequestConfig): HTTP.RequestConfig {
+  resolveConfig(init?: Http.RequestConfig): Http.RequestConfig {
     return this[Service.resolveConfig](this.config, init)
   }
 
-  resolveURL(url: string | URL, config: HTTP.RequestConfig, isWebSocket = false) {
+  resolveURL(url: string | URL, config: Http.RequestConfig, isWebSocket = false) {
     try {
       url = new URL(url, config.baseUrl)
     } catch (error) {
@@ -326,7 +326,7 @@ export class HTTP extends Service<HTTP.Intercept> {
 
     const dispose = this.ctx.effect(() => {
       const timer = config.timeout && setTimeout(() => {
-        controller.abort(new HTTPError('request timeout', 'TIMEOUT'))
+        controller.abort(new HttpError('request timeout', 'TIMEOUT'))
       }, config.timeout)
       return () => {
         clearTimeout(timer)
@@ -365,15 +365,18 @@ export class HTTP extends Service<HTTP.Intercept> {
       }
 
       const response = await this.ctx.waterfall(this, 'http/fetch', url, init, config, () => {
+        this.ctx.logger('http:request').debug('%c %s', method, url.href)
         return this.undici.fetch(url, init) as any
       }).catch((cause) => {
-        if (HTTP.Error.is(cause)) throw cause
-        const error = new HTTP.Error(`fetch ${url} failed`)
+        this.ctx.logger('http:request').debug('%c %s failed: %o', method, url.href, cause)
+        if (Http.Error.is(cause)) throw cause
+        const error = new Http.Error(`fetch ${url} failed`)
         error.cause = cause
         throw error
       })
 
-      response[kHTTPConfig] = config
+      this.ctx.logger('http:response').debug('%c %s %s %s', method, url.href, response.status, response.statusText)
+      response[kHttpConfig] = config
       return response
     } finally {
       dispose()
@@ -381,17 +384,17 @@ export class HTTP extends Service<HTTP.Intercept> {
   }
 
   private async _decode(response: Response) {
-    const config: HTTP.RequestConfig = response[kHTTPConfig]
+    const config: Http.RequestConfig = response[kHttpConfig]
     const validateStatus = config.validateStatus ?? (() => true)
     if (!validateStatus(response.status)) {
-      throw new HTTP.Error(response.statusText, 'STATUS_ERROR', response)
+      throw new Http.Error(response.statusText, 'STATUS_ERROR', response)
     }
 
     if (!config.responseType) {
       return this.defaultDecoder(response)
     }
 
-    let decoder: HTTP.Decoder
+    let decoder: Http.Decoder
     if (typeof config.responseType === 'function') {
       decoder = config.responseType
     } else {
@@ -403,12 +406,12 @@ export class HTTP extends Service<HTTP.Intercept> {
     return decoder(response)
   }
 
-  async head(url: string | URL, config?: HTTP.RequestConfig) {
+  async head(url: string | URL, config?: Http.RequestConfig) {
     const response = await this(url, { method: 'HEAD', responseType: 'headers', ...config })
     return this._decode(response)
   }
 
-  ws(url: string | URL, _config?: HTTP.Config) {
+  ws(url: string | URL, _config?: Http.Config) {
     const config = this.resolveConfig(_config)
     url = this.resolveURL(url, config, true)
     const headers = new Headers(config.headers) as unknown as HeadersInit
@@ -424,6 +427,7 @@ export class HTTP extends Service<HTTP.Intercept> {
     }
 
     const socket = this.ctx.waterfall(this, 'http/websocket', url, init, config, () => {
+      this.ctx.logger('http:ws').debug('connect %s', url.href)
       return new this.undici.WebSocket(url, init)
     })
     const dispose = this.ctx.effect(() => {
@@ -436,4 +440,4 @@ export class HTTP extends Service<HTTP.Intercept> {
   }
 }
 
-export default HTTP
+export default Http
