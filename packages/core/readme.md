@@ -87,7 +87,7 @@ Open a WebSocket connection.
 #### http.Error.is(error)
 
 ```ts
-function is(error: any): error is HTTP.Error
+function is(error: any): error is Http.Error
 ```
 
 ### Config

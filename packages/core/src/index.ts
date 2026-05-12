@@ -2,7 +2,6 @@ import { Context, Inject, Service } from 'cordis'
 import { Awaitable, Binary, defineProperty, Dict, isNullable } from 'cosmokit'
 import { createRequire } from 'node:module'
 import fetchFile from '@cordisjs/fetch-file'
-import type {} from '@cordisjs/plugin-logger'
 import type { Dispatcher, HeadersInit, RequestInit, WebSocket, WebSocketInit } from 'undici'
 import z from 'schemastery'
 
@@ -134,7 +133,6 @@ export interface Http {
 // we don't use `raw.ok` because it may be a 3xx redirect
 const validateStatus = (status: number) => status < 400
 
-@Inject('logger')
 export class Http extends Service<Http.Intercept> {
   static Error = HttpError
 
@@ -365,17 +363,17 @@ export class Http extends Service<Http.Intercept> {
       }
 
       const response = await this.ctx.waterfall(this, 'http/fetch', url, init, config, () => {
-        this.ctx.logger('http:request').debug('%c %s', method, url.href)
+        this.ctx.logger('http:request').debug('%C %s', method, url.href)
         return this.undici.fetch(url, init) as any
       }).catch((cause) => {
-        this.ctx.logger('http:request').debug('%c %s failed: %o', method, url.href, cause)
+        this.ctx.logger('http:request').debug('%C %s failed: %o', method, url.href, cause)
         if (Http.Error.is(cause)) throw cause
         const error = new Http.Error(`fetch ${url} failed`)
         error.cause = cause
         throw error
       })
 
-      this.ctx.logger('http:response').debug('%c %s %s %s', method, url.href, response.status, response.statusText)
+      this.ctx.logger('http:response').debug('%C %s %s %s', method, url.href, response.status, response.statusText)
       response[kHttpConfig] = config
       return response
     } finally {
