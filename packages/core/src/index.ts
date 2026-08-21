@@ -2,7 +2,7 @@ import { Context, Inject, Service } from 'cordis'
 import { Awaitable, Binary, defineProperty, Dict, isNullable } from 'cosmokit'
 import { createRequire } from 'node:module'
 import fetchFile from '@cordisjs/fetch-file'
-import type { Dispatcher, HeadersInit, RequestInit, WebSocket, WebSocketInit } from 'undici'
+import type { Dispatcher, HeadersInit, RequestInit, WebSocketInit } from 'undici'
 import z from 'schemastery'
 
 declare module 'cordis' {
@@ -426,7 +426,7 @@ export class Http extends Service<Http.Intercept> {
 
     const socket = this.ctx.waterfall(this, 'http/websocket', url, init, config, () => {
       this.ctx.logger('http:ws').debug('connect %s', url.href)
-      return new this.undici.WebSocket(url, init)
+      return new this.undici.WebSocket(url, init) as any
     })
     const dispose = this.ctx.effect(() => {
       return () => socket.close(1000, 'context disposed')
