@@ -23,6 +23,47 @@ declare module 'cordis' {
 const kHttpError = Symbol.for('cordis.http.error')
 const kHttpConfig = Symbol.for('cordis.http.config')
 
+function findOwnValue(source: any, predicate: (value: any, key: PropertyKey) => boolean) {
+  for (const key of Reflect.ownKeys(source)) {
+    const value = source[key]
+    if (predicate(value, key)) return value
+  }
+}
+
+function setupInternalUndici(undici: typeof import('undici')) {
+  const runtime: Partial<typeof import('undici')> = undici
+  if (!runtime.getGlobalDispatcher) return
+  runtime.Agent ??= runtime.getGlobalDispatcher().constructor as any
+  if (runtime.ProxyAgent && runtime.buildConnector) return
+  if (!runtime.EnvHttpProxyAgent) return
+
+  const envAgent = new runtime.EnvHttpProxyAgent({
+    httpProxy: 'http://localhost',
+    noProxy: '',
+  })
+  const proxyAgent = findOwnValue(envAgent, (value) => {
+    return value?.constructor?.name === 'ProxyAgent'
+  })
+  void envAgent.close().catch(() => {})
+  if (!proxyAgent) return
+
+  const ProxyAgent = runtime.ProxyAgent ??= proxyAgent.constructor
+  runtime.buildConnector ??= (options = {}) => {
+    const agent = new ProxyAgent({
+      uri: 'http://localhost',
+      requestTls: options,
+    })
+    const connector = findOwnValue(agent, (value, key) => {
+      if (typeof value !== 'function') return false
+      if (typeof key === 'symbol' && key.description === 'connect endpoint function') return true
+      return value.name === 'connect' && value.length === 2
+    })
+    void agent.close().catch(() => {})
+    if (!connector) throw new Error('cannot access the internal undici connector')
+    return connector
+  }
+}
+
 class HttpError extends Error {
   [kHttpError] = true
 
@@ -143,6 +184,7 @@ export class Http extends Service<Http.Intercept> {
     try {
       if (process.execArgv.includes('--expose-internals')) {
         this.undici = require('internal/deps/undici/undici')
+        setupInternalUndici(this.undici)
       } else {
         this.undici = require('undici')
       }
