@@ -17,9 +17,14 @@ import HTTP from '@cordisjs/plugin-http'
 const ctx = new Context()
 ctx.plugin(HTTP)
 
+// The verb helpers resolve to the decoded body.
 const data = await ctx.http.get('https://example.com')
-const data = await ctx.http.post('https://example.com', body)
-const { status, data } = await ctx.http('https://example.com', { method: 'GET' })
+const created = await ctx.http.post('https://example.com', body)
+
+// Calling the service directly resolves to the raw fetch `Response`.
+const response = await ctx.http('https://example.com', { method: 'GET' })
+console.log(response.status)
+const text = await response.text()
 ```
 
 ## API
@@ -30,11 +35,11 @@ const { status, data } = await ctx.http('https://example.com', { method: 'GET' }
 
 ```ts
 interface HTTP {
-  <T = any>(url: string | URL, config?: Config): Promise<Response<T>>
+  (url: string | URL, config?: Config): Promise<Response>
 }
 ```
 
-Send a request.
+Send a request. The promise resolves to the raw [fetch `Response`](https://developer.mozilla.org/en-US/docs/Web/API/Response); the body has not been read. Use a verb helper below if you want the decoded body instead.
 
 #### http.[get|delete|head](url, config?)
 
@@ -80,9 +85,7 @@ Open a WebSocket connection.
 
 > [!NOTE]
 > 
-> Currently we will use [`ws`](https://github.com/websockets/ws) package to polyfill [`WebSocket`](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) in Node.js.
-> 
-> Once Node.js has a stable WebSocket API, we will switch to it.
+> The WebSocket implementation is taken from [`undici`](https://github.com/nodejs/undici) (`this.undici.WebSocket`), the same runtime used for `fetch` above.
 
 #### http.Error.is(error)
 
@@ -170,14 +173,7 @@ The request timeout in milliseconds.
 
 ### Response
 
-```ts
-interface Response<T> {
-  status: number
-  statusText: string
-  headers: Headers
-  data: T
-}
-```
+`http(url, config?)` resolves to the raw [fetch `Response`](https://developer.mozilla.org/en-US/docs/Web/API/Response). Its body is not read.
 
 #### response.status
 
@@ -191,6 +187,18 @@ See [Response#statusText](https://developer.mozilla.org/en-US/docs/Web/API/Respo
 
 See [Response#headers](https://developer.mozilla.org/en-US/docs/Web/API/Response/headers).
 
-#### response.data
+#### response.body
 
-The decoded response body.
+The body is unread. Consume it with the standard methods - `response.json()`, `response.text()`, `response.arrayBuffer()`, `response.blob()` or `response.formData()`.
+
+#### Decoding
+
+`http.get` / `http.delete` / `http.head` / `http.post` / `http.put` / `http.patch` call the service and then decode the body, so they resolve to the decoded value rather than a `Response`:
+
+| call | resolves to |
+|---|---|
+| `http.get(url, config?)`<br>`http.delete(url, config?)` | decoded body |
+| `http.post(url, data, config?)`<br>`http.put(url, data, config?)`<br>`http.patch(url, data, config?)` | decoded body |
+| `http.head(url, config?)` | `Headers` |
+
+The decoder is `config.responseType` when given - a key of `ResponseTypes`, or a `(raw: Response) => T` function - and otherwise inferred from the `content-type` header: JSON for `application/json`, text for `text/*`, and an `ArrayBuffer` for anything else.
