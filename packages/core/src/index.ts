@@ -53,6 +53,34 @@ function encodeRequest(data: any): [string | null, any] {
   return ['application/json', JSON.stringify(data)]
 }
 
+function lookupType(filename: string): string | undefined {
+  const ext = /\.([^.]+)$/.exec(filename)?.[1]?.toLowerCase()
+  if (!ext) return
+  return Object.keys(mimedb).find(type => mimedb[type].extensions?.includes(ext))
+}
+
+function fixExtension(filename: string, type: string) {
+  // keep existing extension
+  // only append when missing(asset -> asset.webp)
+  if (/\.[^.]+$/.test(filename)) return filename
+  const ext = mimedb[type]?.extensions?.[0]
+  return ext ? `${filename}.${ext}` : filename
+}
+
+function parseFilename(disposition: string | null): string | undefined {
+  if (!disposition) return
+  const extended = /filename\*\s*=\s*(?:[\w-]+)?'[^']*'([^;]+)/i.exec(disposition)
+  if (extended) {
+    try {
+      return decodeURIComponent(extended[1].trim())
+    } catch {}
+  }
+  const plain = /filename\s*=\s*(?:"((?:\\.|[^"])*)"|([^;]+))/i.exec(disposition)
+  if (!plain) return
+  const name = plain[1]?.replace(/\\(.)/g, '$1') ?? plain[2].trim()
+  return name.split(/[\\/]/).pop() || undefined
+}
+
 export namespace HTTP {
   export type Method =
     | 'get' | 'GET'
@@ -418,23 +446,42 @@ export class HTTP extends Service<HTTP.Config> {
     url = this.resolveURL(url, config).toString()
     const task = await this.ctx.serial(this, 'http/file', url, options)
     if (task) return task
-    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
-    const capture = /^data:([\w/.+-]+);base64,(.*)$/.exec(url)
+    // data:[<media-type>][;base64],<data>
+    // https://developer.mozilla.org/en-US/docs/Web/URI/Reference/Schemes/data
+    const capture = /^data:([^,]*),(.*)$/.exec(url)
     if (capture) {
-      const [, type, base64] = capture
-      let name = 'file'
-      const ext = type && mimedb[type]?.extensions?.[0]
-      if (ext) name += `.${ext}`
-      return { type, mime: type, data: Binary.fromBase64(base64), filename: name }
+      let [, type, body] = capture
+      let data: ArrayBuffer
+      if (type.endsWith(';base64')) {
+        type = type.slice(0, -7)
+        data = Binary.fromBase64(body) as ArrayBuffer
+      } else {
+        data = new TextEncoder().encode(decodeURIComponent(body)).buffer as ArrayBuffer
+      }
+      type = type.split(';')[0].trim().toLowerCase() || 'text/plain'
+      return { type, mime: type, data, filename: fixExtension('file', type) }
     }
     const { headers, data, url: responseUrl } = await this<ArrayBuffer>(url, {
       method: 'GET',
       responseType: 'arraybuffer',
       timeout: +options.timeout! || undefined,
     })
-    const type = headers.get('content-type')!
-    const [, name] = responseUrl.match(/.+\/([^/?]*)(?=\?)?/)!
-    return { type, mime: type, filename: name, data }
+    let name = parseFilename(headers.get('content-disposition'))
+    if (!name) {
+      // remove query
+      const segment = new URL(responseUrl).pathname.split('/').pop()!
+      try {
+        name = decodeURIComponent(segment)
+      } catch {
+        name = segment
+      }
+    }
+    name ||= 'file'
+    let type = headers.get('content-type')?.split(';')[0].trim().toLowerCase()
+    if (!type || type === 'application/octet-stream') {
+      type = lookupType(name) ?? type ?? 'application/octet-stream'
+    }
+    return { type, mime: type, filename: fixExtension(name, type), data }
   }
 
   async isLocal(url: string) {
